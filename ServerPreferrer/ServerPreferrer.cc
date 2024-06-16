@@ -1,3 +1,26 @@
+/**
+ *  TODO???????????????????
+ *    uh...
+ *  I WANTED TO DO THE FUCKING NAMEPLATE PLUGIN!!! UGH FUCK CMAKE!
+ *  AND FUCK BAKKESMOD PEOPLE
+ *
+ *  ------------------------------------------------------------------
+ *  oh, vcpkg ... rapidcsv or something (I just think rapid csv is most popular)
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
 #include "ServerPreferrer.h"
 
 #include <regex>
