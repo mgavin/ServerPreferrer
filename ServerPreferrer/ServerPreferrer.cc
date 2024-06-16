@@ -24,6 +24,7 @@
 #include "ServerPreferrer.h"
 
 #include <regex>
+#include <thread>
 
 // clang-format off
 #include "Windows.h"
