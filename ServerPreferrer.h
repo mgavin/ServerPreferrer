@@ -10,25 +10,19 @@
 // #include "bm_helper.h"
 // #include "imgui_helper.h"
 
-class ServerPreferrer :
-        public BakkesMod::Plugin::BakkesModPlugin,
-        public BakkesMod::Plugin::PluginSettingsWindow {
+class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
 private:
         // data members
-        static inline const std::string           cmd_prefix = "sp_";
-        // for reading the Launch.log file
-        // needs to be taken from the user... in like, a file dialog modal
-        // workshop map loader plugin?
-        static inline const std::filesystem::path launch_log_path =
-                "C:/Users/matthew/Documents/My Games/Rocket League/TAGame/Logs/Launch.log";
+        static inline const std::string cmd_prefix = "sp_";
 
-        std::ifstream launch_file;
-
+        std::filesystem::path         launch_log_path;
+        std::ifstream                 launch_file;
         std::unique_ptr<std::jthread> thread;
 
         // helper functions
         void init_cvars();
         void init_hooked_events();
+        void init_data();
 
         void read_log_and_ping();
         void check_launch_log(std::streamoff start_read);
