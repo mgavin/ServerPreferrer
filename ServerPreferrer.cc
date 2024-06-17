@@ -9,6 +9,7 @@
 
 #include "ServerPreferrer.h"
 
+#include <chrono>
 #include <regex>
 #include <thread>
 
@@ -34,6 +35,8 @@
 
 #include "HookedEvents.h"
 #include "Logger.h"
+
+void time_icmp_ping(std::string, int, int &);
 
 BAKKESMOD_PLUGIN(ServerPreferrer, "ServerPreferrer", "0.0.0", /*UNUSED*/ NULL);
 std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
@@ -76,11 +79,9 @@ void ServerPreferrer::init_cvars() {
 /// group together the initialization of hooked events
 /// </summary>
 void ServerPreferrer::init_hooked_events() {
-        HookedEvents::AddHookedEvent(
-                "Function TAGame.PlayerController_TA.ReportServer",
-                [](std::string eventName) {
-                        // add server to the "skipped" list.
-                });
+        HookedEvents::AddHookedEvent("Function TAGame.PlayerController_TA.ReportServer", [](std::string eventName) {
+                // add server to the "skipped" list.
+        });
 
         HookedEvents::AddHookedEvent(
                 "Function TAGame.GFxData_Matchmaking_TA.StartMatchmaking",
@@ -106,12 +107,11 @@ void ServerPreferrer::init_hooked_events() {
                         HookedEvents::AddHookedEvent(
                                 "Function Engine.DateTime.EpochNow",
                                 [this, start](std::string eventName) {
-                                        check_launch_log(start);
-                                        HookedEvents::AddHookedEvent(
-                                                "Function ProjectX.GFxEngine_X.Tick",
-                                                [](...) {},
-
-                                                true);
+                                        if (check_launch_log(start)) {
+                                                // ready to process
+                                                // spawn a thread to do the pinging
+                                                check_ping(server_entries.back().ping_url, 40);
+                                        }
                                 });
                 });
 
@@ -127,43 +127,35 @@ void ServerPreferrer::init_hooked_events() {
                         // LOG("log file closed");
                 });
 
-        HookedEvents::AddHookedEvent(
-                "Function Engine.GameInfo.PreExit",
-                [this](std::string eventName) {
-                        // ASSURED CLEANUP
-                        onUnload();
-                });
+        HookedEvents::AddHookedEvent("Function Engine.GameInfo.PreExit", [this](std::string eventName) {
+                // ASSURED CLEANUP
+                onUnload();
+        });
 }
 
-void try_icmp_ping(
-        std::string                           ipaddr,
-        int                                   threshold,
-        std::shared_ptr<GameWrapper> *        gw,
-        std::shared_ptr<CVarManagerWrapper> * cvmw) {
-        auto CancelMatchmaking = [&gw]() {
-                MatchmakingWrapper mw = (*gw)->GetMatchmakingWrapper();
-                if (mw) {
-                        mw.CancelMatchmaking();
-                }
-        };
+void ServerPreferrer::init_data() {
+}
 
+void time_icmp_ping(std::string pingaddr, int times, int & out) {
         // https:  //
         // learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
         HANDLE        hIcmpFile;
         unsigned long ip_addr  = INADDR_NONE;
         DWORD         dwRetVal = 0;
 
+        std::string ipaddr = pingaddr.substr(0, pingaddr.find(":"));  // exclude port part
+
         inet_pton(AF_INET, ipaddr.c_str(), reinterpret_cast<void *>(&ip_addr));
         if (ip_addr == INADDR_NONE) {
                 LOG("WTF inet_pton???");
-                CancelMatchmaking();
+                out = -1;
                 return;
         }
 
         hIcmpFile = IcmpCreateFile();
         if (hIcmpFile == INVALID_HANDLE_VALUE) {
                 LOG("ICMP HANDLE VALUE ERROR: {}", GetLastError());
-                CancelMatchmaking();
+                out = -1;
                 return;
         }
 
@@ -172,11 +164,11 @@ void try_icmp_ping(
         DWORD  ReplySize   = 0;
         ReplySize          = sizeof(ICMP_ECHO_REPLY) + sizeof(SendData);
         ReplyBuffer        = (VOID *)malloc(ReplySize);
-        int avg            = 0;
-        int i              = 1;
-        for (int j = 1; j <= 5; ++j) {
-                [[maybe_unused]] auto t1 = std::chrono::high_resolution_clock::now();
-                dwRetVal                 = IcmpSendEcho(
+
+        int avg = 0;
+        int i   = 1;
+        for (int j = 1; j <= times; ++j) {
+                dwRetVal = IcmpSendEcho(
                         hIcmpFile,
                         ip_addr,
                         SendData,
@@ -188,45 +180,16 @@ void try_icmp_ping(
                 if (dwRetVal != 0) {
                         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
                         char             addr[32]   = {0};
-                        inet_ntop(
-                                AF_INET,
-                                reinterpret_cast<void *>(&(pEchoReply->Address)),
-                                addr,
-                                32);
-                        // LOG("RECEIVED FROM: {}, STATUS: {}, ROUNDTRIP TIME: {}",
-                        //     addr,
-                        //     pEchoReply->Status,
-                        //     pEchoReply->RoundTripTime);
+                        inet_ntop(AF_INET, reinterpret_cast<void *>(&(pEchoReply->Address)), addr, 32);
                         avg += pEchoReply->RoundTripTime;
                 } else {
-                        LOG("PING ERROR ON #{}", i);
-                        CancelMatchmaking();
+                        out = -1;
                         return;
                 }
                 i = j;
         }
 
-        LOG("AVERAGE PING {0:c} THRESHOLD, {1} {0:c} {2}",
-            avg > threshold   ? '>'
-            : avg < threshold ? '<'
-                              : '=',
-            avg,
-            threshold);
-        (*gw)->LogToChatbox(
-                std::vformat(
-                        "AVERAGE PING {0:c} THRESHOLD, {1} {0:c} {2}",
-                        std::make_format_args(
-                                avg > threshold   ? '>'
-                                : avg < threshold ? '<'
-                                                  : '=',
-                                avg,
-                                threshold)),
-                "BMP");
-        if (avg > threshold || avg < 0) {
-                (*gw)->Execute(
-                        [&cvmw](GameWrapper * gw) { (*cvmw)->executeCommand("queue_cancel"); });
-                (*gw)->Execute([&cvmw](GameWrapper * gw) { (*cvmw)->executeCommand("queue"); });
-        }
+        out = avg / i;
 }
 
 /*
@@ -286,160 +249,97 @@ t1).count());
 */
 
 /// <summary>
-/// Separate into read_log and check_ping
+/// Check the Launch.log file for a certain match
 ///
-/// FUN FUN FUN
+/// Adds to the server entries if there's a match.
 /// </summary>
-void ServerPreferrer::read_log_and_ping() {
+/// <param name="start_read">Where to start reading in the file.</param>
+/// <returns>True if match is met. False if there's no match.</returns>
+bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
         gameWrapper->ExecuteUnrealCommand("flushlog");
         std::string line;
-        std::regex  pingurlmatch {".*PingURL=\"(.*?)[\"].*"};
+
+        std::regex server_info_match {
+                ".*?ServerName=\"([a-zA-Z0-9-]+)\""
+                ".*?Playlist=([0-9]+)"
+                ".*?Region=\"([a-zA-Z0-9-]+)\""
+                ".*?PingURL=\"([0-9.:-]+)\""
+                ".*?GameURL=\"([0-9.:-]+)\".*",
+                std::regex::extended | std::regex::icase};
+
         while (std::getline(launch_file, line)) {
-                std::string ipstr;
-                try {
-                        // LOG("{}", line);
-                        std::smatch rematch;
-                        if (std::regex_match(line, rematch, pingurlmatch)) {
-                                if (rematch.size() == 2) {
-                                        std::ssub_match m {rematch[1]};
-                                        // LOG("PING URL: {}", m.str());
-                                        ipstr = m.str();
-                                }
-                        }
-                } catch (...) {
-                        cvarManager->log("FORMAT ERROR: " + line);
-                }
+                std::smatch re_match;
+                if (std::regex_match(line, re_match, server_info_match)) {
+                        if (re_match.size() == 6) {
+                                // A MATCH to the needed line!
+                                // 6 because the first "match" is basically the entire line.
+                                std::ssub_match server_name {re_match[1]};
+                                std::ssub_match server_playlist {re_match[2]};
+                                std::ssub_match server_region {re_match[3]};
+                                std::ssub_match server_pingurl {re_match[4]};
+                                std::ssub_match server_gameurl {re_match[5]};
 
-                std::string ipp1, ipp2, ipp3, ipp4;
-                std::string port;
-                if (!ipstr.empty()) {
-                        std::regex  ipdiv {"(\\d+).(\\d+).(\\d+).(\\d+):(\\d+)"};
-                        std::smatch ipmatch;
-                        if (std::regex_match(ipstr, ipmatch, ipdiv)) {
-                                if (ipmatch.size() == 6) {
-                                        std::ssub_match ipm1 {ipmatch[1]};
-                                        std::ssub_match ipm2 {ipmatch[2]};
-                                        std::ssub_match ipm3 {ipmatch[3]};
-                                        std::ssub_match ipm4 {ipmatch[4]};
-                                        std::ssub_match ipm5 {ipmatch[5]};
-                                        /* LOG("1st: {}, 2nd: {}, 3rd: "
-                                             "{}, 4th: {} | PORT: {}",
-                                            ipm1.str(),
-                                            ipm2.str(),
-                                            ipm3.str(),
-                                            ipm4.str(),
-                                            ipm5.str());*/
+                                server_entries.emplace_back(server_info {
+                                        .tp =
+                                                std::chrono::zoned_seconds {
+                                                                            std::chrono::current_zone(),
+                                                                            std::chrono::time_point_cast<std::chrono::seconds>(
+                                                                            std::chrono::system_clock::now())},
+                                        .server_name = server_name.str(),
+                                        .playlist_id = server_playlist.str(),
+                                        .region      = server_region.str(),
+                                        .ping_url    = server_pingurl.str(),
+                                        .game_url    = server_gameurl.str()
+                                });
 
-                                        ipp1 = ipm1.str();
-                                        ipp2 = ipm2.str();
-                                        ipp3 = ipm3.str();
-                                        ipp4 = ipm4.str();
-                                        port = ipm5.str();
-                                }
-                        } else {
-                                LOG("COULDN'T BREAK APART IPADDR?");
-                                break;
+                                return true;
                         }
-
-                        std::string lol       = ipp1 + "." + ipp2 + "." + ipp3 + "." + ipp4;
-                        int         threshold = 0;
-                        CVarWrapper cv =
-                                cvarManager->getCvar(cmd_prefix + "server_ping_threshold");
-                        if (cv) {
-                                threshold = cv.getIntValue();
-                        }
-                        //// TRY TO PING!
-                        std::thread t {
-                                try_icmp_ping,
-                                lol,
-                                threshold,
-                                &gameWrapper,
-                                &cvarManager};
-                        t.detach();
-                        //// try_tcp_ping(lol, port);
                 }
         }
         launch_file.clear();
+        return false;
 }
 
-/// <summary>
-/// CHECK - because operations are done if conditions met
-///
-/// check the Launch.log file for a certain match
-/// </summary>
-void ServerPreferrer::check_launch_log(std::streamoff start_read) {
-        gameWrapper->ExecuteUnrealCommand("flushlog");
-        std::string line;
-        // clang-format off
-        std::regex  pingurlmatch {
-                ".*ServerName=\"(.*?)[\"]"
-                ".*Playlist=(\\d+)"
-                ".*Region=\"(.*?)[\"]"
-                ".*PingURL=\"(.*?)[\"].*"
-				};
-        // clang-format on
-        while (std::getline(launch_file, line)) {
-                std::string ipstr;
+void ServerPreferrer::check_ping(std::string ip_address, int threshold) {
+        int          avg_ping = 0;
+        std::jthread jt {time_icmp_ping, ip_address, 5, std::ref(avg_ping)};
+        jt.detach();
 
-                std::smatch rematch;
-                if (std::regex_match(line, rematch, pingurlmatch)) {
-                        if (rematch.size() == 2) {
-                                std::ssub_match m {rematch[1]};
-                                // LOG("PING URL: {}", m.str());
-                                ipstr = m.str();
-                        }
-                }
-
-                std::string ipp1, ipp2, ipp3, ipp4;
-                std::string port;
-                if (!ipstr.empty()) {
-                        std::regex  ipdiv {"(\\d+).(\\d+).(\\d+).(\\d+):(\\d+)"};
-                        std::smatch ipmatch;
-                        if (std::regex_match(ipstr, ipmatch, ipdiv)) {
-                                if (ipmatch.size() == 6) {
-                                        std::ssub_match ipm1 {ipmatch[1]};
-                                        std::ssub_match ipm2 {ipmatch[2]};
-                                        std::ssub_match ipm3 {ipmatch[3]};
-                                        std::ssub_match ipm4 {ipmatch[4]};
-                                        std::ssub_match ipm5 {ipmatch[5]};
-                                        /* LOG("1st: {}, 2nd: {}, 3rd: "
-                                             "{}, 4th: {} | PORT: {}",
-                                            ipm1.str(),
-                                            ipm2.str(),
-                                            ipm3.str(),
-                                            ipm4.str(),
-                                            ipm5.str());*/
-
-                                        ipp1 = ipm1.str();
-                                        ipp2 = ipm2.str();
-                                        ipp3 = ipm3.str();
-                                        ipp4 = ipm4.str();
-                                        port = ipm5.str();
-                                }
-                        } else {
-                                LOG("COULDN'T BREAK APART IPADDR?");
-                                break;
+        HookedEvents::AddHookedEvent(
+                "Function ProjectX.GFxEngine_X.Tick",
+                [this, &avg_ping, &threshold, &jt](...) {
+                        if (!jt.joinable()) {
+                                return;
                         }
 
-                        std::string lol       = ipp1 + "." + ipp2 + "." + ipp3 + "." + ipp4;
-                        int         threshold = 0;
-                        CVarWrapper cv =
-                                cvarManager->getCvar(cmd_prefix + "server_ping_threshold");
-                        if (cv) {
-                                threshold = cv.getIntValue();
+                        jt.join();
+
+                        LOG("AVERAGE PING {0:c} THRESHOLD, {1} {0:c} {2}",
+                            avg_ping > threshold   ? '>'
+                            : avg_ping < threshold ? '<'
+                                                   : '=',
+                            avg_ping,
+                            threshold);
+
+                        gameWrapper->LogToChatbox(
+                                std::vformat(
+                                        "AVERAGE PING {0:c} THRESHOLD, {1} "
+                                        "{0:c} {2}",
+                                        std::make_format_args(
+                                                avg_ping > threshold   ? '>'
+                                                : avg_ping < threshold ? '<'
+                                                                       : '=',
+                                                avg_ping,
+                                                threshold)),
+                                "BMP");
+                        if (avg_ping > threshold || avg_ping < 0) {
+                                gameWrapper->Execute(
+                                        [this](GameWrapper * gw) { cvarManager->executeCommand("queue_cancel"); });
+                                gameWrapper->Execute(
+                                        [this](GameWrapper * gw) { cvarManager->executeCommand("queue"); });
                         }
-                        //// TRY TO PING!
-                        std::thread t {
-                                try_icmp_ping,
-                                lol,
-                                threshold,
-                                &gameWrapper,
-                                &cvarManager};
-                        t.detach();
-                        //// try_tcp_ping(lol, port);
-                }
-        }
-        launch_file.clear();
+                },
+                true);
 }
 
 /// <summary>
@@ -513,11 +413,7 @@ static inline void AddUnderline(ImColor col_) {
 /// taken from https://gist.github.com/dougbinks/ef0962ef6ebe2cadae76c4e9f0586c69
 /// "hyperlink urls"
 /// </summary>
-static inline void TextURL(
-        const char * name_,
-        const char * URL_,
-        uint8_t      SameLineBefore_,
-        uint8_t      SameLineAfter_) {
+static inline void TextURL(const char * name_, const char * URL_, uint8_t SameLineBefore_, uint8_t SameLineAfter_) {
         if (1 == SameLineBefore_) {
                 ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
         }
