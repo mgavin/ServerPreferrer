@@ -13,17 +13,20 @@
 // #include "bm_helper.h"
 // #include "imgui_helper.h"
 
-class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
+class ServerPreferrer :
+        public BakkesMod::Plugin::BakkesModPlugin,
+        public BakkesMod::Plugin::PluginSettingsWindow {
 private:
         // const data members
         static inline const std::string cmd_prefix = "sp_";
 
         // the saving of data should have its functionality separated
         const std::filesystem::path RECORD_POPULATION_FILE =
-                gameWrapper->GetDataFolder().append("ServerPreferrer\\ServerJoiningRecords.csv");
+                gameWrapper->GetDataFolder().append(
+                        "ServerPreferrer\\ServerJoiningRecords.csv");
         const std::string                            DATETIME_FORMAT_STR = "{0:%F}T{0:%T%z}";
         const std::string                            DATETIME_PARSE_STR  = "%FT%T%z";
-        static inline const std::chrono::time_zone * tz                  = std::chrono::current_zone();
+        static inline const std::chrono::time_zone * tz = std::chrono::current_zone();
 
         // processing in another thread data
         std::unique_ptr<std::jthread> thread;
