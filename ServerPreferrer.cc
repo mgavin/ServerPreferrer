@@ -4,8 +4,14 @@
  * - persistent storage
  * - init data
  * - save data {csv}
- * -
+ * - plugin menu
  *
+ * - uh, checks for being in a party
+ * - checks for playlist category; like, doesn't work for tournaments, or private games?.. doesn't seem to work for
+ * private games)
+ *    - private matches IMMEDIATELY TRAVEL?
+ *    - [8988.26] JoinGame: private match travel immediately!
+ * - drag and drop list (with multiple pages) of servers to automatically dislike/reject
  * ------------------------------------------------------------------
  *
  */
@@ -63,7 +69,6 @@ void ServerPreferrer::onLoad() {
                           + "/Documents/My Games/Rocket League/TAGame/Logs/Launch.log";
 
         init_cvars();
-        init_hooked_events();
         init_data();
 }
 
@@ -71,22 +76,52 @@ void ServerPreferrer::onLoad() {
 /// group together the initialization of cvars
 /// </summary>
 void ServerPreferrer::init_cvars() {
-        cvarManager
-                ->registerCvar(cmd_prefix + "enabled", "true", "global flag to determine if plugin functions", false);
+        CVarWrapper enabled_cv = cvarManager->registerCvar(
+                cmd_prefix + "enabled",
+                "1",
+                "global flag to determine if plugin functions",
+                false);
+        enabled_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
+                if (newValue.getBoolValue()) {
+                        enable_plugin();
+                } else {
+                        disable_plugin();
+                }
+        });
 
-        cvarManager->registerCvar(
+        CVarWrapper threshold_cv = cvarManager->registerCvar(
                 cmd_prefix + "server_ping_threshold",
-                "30",
+                "40",
                 "ping threshold for a server connection",
                 false,
                 true,
                 0);
+        // threshold_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
 
-        cvarManager->registerCvar(
+        //});
+
+        CVarWrapper should_requeue_cv = cvarManager->registerCvar(
                 cmd_prefix + "should_requeue_after_ping_test",
                 "1",
                 "should plugin try to requeue if failed ping test?",
                 false);
+        // should_requeue_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
+
+        //});
+}
+
+/// <summary>
+/// :)
+/// </summary>
+void ServerPreferrer::enable_plugin() {
+        init_hooked_events();
+}
+
+/// <summary>
+/// :)
+/// </summary>
+void ServerPreferrer::disable_plugin() {
+        HookedEvents::RemoveAllHooks();
 }
 
 /// <summary>
@@ -225,8 +260,7 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
 }
 
 void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::optional<int>> & out) {
-        // https:  //
-        // learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
+        // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
         HANDLE        hIcmpFile;
         unsigned long ip_addr  = INADDR_NONE;
         DWORD         dwRetVal = 0;
@@ -522,6 +556,24 @@ static inline void TextURL(  // NOLINT
 /// settings, this will be used instead.
 /// </summary>
 void ServerPreferrer::RenderSettings() {
+        CVarWrapper enabled_cv     = cvarManager->getCvar(cmd_prefix + "enabled");
+        bool        plugin_enabled = enabled_cv.getBoolValue();
+        if (ImGui::Checkbox("Enable Plugin", &plugin_enabled)) {
+                enabled_cv.setValue(plugin_enabled);
+        }
+
+        CVarWrapper threshold_cv = cvarManager->getCvar(cmd_prefix + "server_ping_threshold");
+        int         threshold    = threshold_cv.getIntValue();
+        if (ImGui::SliderInt("Maximum allowed ping to server.", &threshold, 0, 400)) {
+                threshold = std::clamp(threshold, 0, 400);
+                threshold_cv.setValue(threshold);
+        }
+
+        CVarWrapper should_requeue_cv = cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
+        bool        should_requeue    = should_requeue_cv.getBoolValue();
+        if (ImGui::Checkbox("Should requeue automatically after failing ping test?", &should_requeue)) {
+                should_requeue_cv.setValue(should_requeue);
+        }
 }
 
 /// <summary>

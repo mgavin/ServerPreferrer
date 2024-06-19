@@ -30,9 +30,6 @@ private:
         // for the threading
         std::atomic<std::optional<int>> current_ping_test;
 
-        // processing in another thread data
-        std::unique_ptr<std::jthread> thread;
-
         // launch log file data
         std::filesystem::path launch_log_path;  // needs to be computed at runtime
         std::ifstream         launch_file;
@@ -56,6 +53,9 @@ private:
         // void init_graph_data(); I want to graph things, separated by regions
 
         // major func
+        void enable_plugin();
+        void disable_plugin();
+
         bool check_launch_log(std::streamoff start_read);
         void check_ping(std::string ip_address, int threshold);
 
