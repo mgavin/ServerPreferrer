@@ -44,7 +44,7 @@
 
 #include "vincentlaucsb-csv-parser/csv.hpp"
 
-#include "HookedEvents.h"
+#include "HookedEvents.h"  // NOLINT
 #include "Logger.h"
 
 namespace log = LOGGER;
