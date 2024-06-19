@@ -7,8 +7,8 @@
  * - plugin menu
  *
  * - uh, checks for being in a party
- * - checks for playlist category; like, doesn't work for tournaments, or private games?.. doesn't seem to work for
- * private games)
+ * - checks for playlist category; like, doesn't work for tournaments, or private games?..
+ * doesn't seem to work for private games)
  *    - private matches IMMEDIATELY TRAVEL?
  *    - [8988.26] JoinGame: private match travel immediately!
  * - drag and drop list (with multiple pages) of servers to automatically dislike/reject
@@ -47,6 +47,7 @@
 #include "HookedEvents.h"
 #include "Logger.h"
 
+namespace log = LOGGER;
 static void time_icmp_ping(std::string, int, std::atomic<std::optional<int>> &);
 
 BAKKESMOD_PLUGIN(ServerPreferrer, "ServerPreferrer", "0.0.0", /*UNUSED*/ NULL);
@@ -105,7 +106,8 @@ void ServerPreferrer::init_cvars() {
                 "1",
                 "should plugin try to requeue if failed ping test?",
                 false);
-        // should_requeue_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
+        // should_requeue_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper
+        // newValue) {
 
         //});
 }
@@ -128,9 +130,11 @@ void ServerPreferrer::disable_plugin() {
 /// group together the initialization of hooked events
 /// </summary>
 void ServerPreferrer::init_hooked_events() {
-        HookedEvents::AddHookedEvent("Function TAGame.PlayerController_TA.ReportServer", [](std::string eventName) {
-                // add server to the "skipped" list.
-        });
+        HookedEvents::AddHookedEvent(
+                "Function TAGame.PlayerController_TA.ReportServer",
+                [](std::string eventName) {
+                        // add server to the "skipped" list.
+                });
 
         HookedEvents::AddHookedEvent(
                 "Function TAGame.GFxData_Matchmaking_TA.StartMatchmaking",
@@ -157,17 +161,21 @@ void ServerPreferrer::init_hooked_events() {
                                 "Function Engine.DateTime.EpochNow",
                                 [this, start](std::string eventName) {
                                         if (check_launch_log(start)) {
-                                                CVarWrapper cv =
-                                                        cvarManager->getCvar(cmd_prefix + "server_ping_threshold");
-                                                int threshold = 40;  // GOOD ENOUGH FOR A BASELINE
+                                                CVarWrapper cv = cvarManager->getCvar(
+                                                        cmd_prefix + "server_ping_threshold");
+                                                int threshold =
+                                                        40;  // GOOD ENOUGH FOR A BASELINE
                                                 if (cv) {
                                                         threshold = cv.getIntValue();
                                                 }
 
-                                                // if we got what we wanted, we'll have a new server entry which is the
-                                                // server we're trying to connect to
+                                                // if we got what we wanted, we'll have a new
+                                                // server entry which is the server we're trying
+                                                // to connect to
 
-                                                check_ping(server_entries.back().ping_url, threshold);
+                                                check_ping(
+                                                        server_entries.back().ping_url,
+                                                        threshold);
                                         }
                                 });
                 });
@@ -182,10 +190,12 @@ void ServerPreferrer::init_hooked_events() {
                         // LOG("log file closed");
                 });
 
-        HookedEvents::AddHookedEvent("Function Engine.GameInfo.PreExit", [this](std::string eventName) {
-                // ASSURED CLEANUP
-                onUnload();
-        });
+        HookedEvents::AddHookedEvent(
+                "Function Engine.GameInfo.PreExit",
+                [this](std::string eventName) {
+                        // ASSURED CLEANUP
+                        onUnload();
+                });
 }
 
 void ServerPreferrer::init_data() {
@@ -213,7 +223,7 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
                         ".*",
                         std::regex::extended | std::regex::icase};
         } catch (const std::exception & e) {
-                LOG("REGEX ERROR? HELP! {}", e.what());
+                log::LOG("REGEX ERROR? HELP! {}", e.what());
                 return false;
         }
 
@@ -235,7 +245,8 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
                                         .tp =
                                                 zoned_seconds {
                                                                current_zone(),
-                                                               time_point_cast<seconds>(system_clock::now())},
+                                                               time_point_cast<seconds>(
+                                                               system_clock::now())},
                                         .server_name = server_name.str(),
                                         .playlist_id = server_playlist.str(),
                                         .region      = server_region.str(),
@@ -243,14 +254,19 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
                                         .game_url    = server_gameurl.str()
                                 });
                                 const server_info & sv = server_entries.back();
-                                LOG("TIME: {}, SERVER_NAME: {}, PLAYLIST_ID: {}, REGION: {}, PING_URL: {}, GAME_URL: "
-                                    "{}",
-                                    std::vformat(DATETIME_FORMAT_STR, std::make_format_args(sv.tp)),
-                                    sv.server_name,
-                                    sv.playlist_id,
-                                    sv.region,
-                                    sv.ping_url,
-                                    sv.game_url);
+                                log::LOG(
+                                        "TIME: {}, SERVER_NAME: {}, PLAYLIST_ID: {}, REGION: "
+                                        "{}, "
+                                        "PING_URL: {}, GAME_URL: "
+                                        "{}",
+                                        std::vformat(
+                                                DATETIME_FORMAT_STR,
+                                                std::make_format_args(sv.tp)),
+                                        sv.server_name,
+                                        sv.playlist_id,
+                                        sv.region,
+                                        sv.ping_url,
+                                        sv.game_url);
                                 return true;
                         }
                 }
@@ -300,7 +316,11 @@ void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::optional<i
                 if (dwRetVal != 0) {
                         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
                         char             addr[32]   = {0};
-                        inet_ntop(AF_INET, reinterpret_cast<void *>(&(pEchoReply->Address)), addr, 32);
+                        inet_ntop(
+                                AF_INET,
+                                reinterpret_cast<void *>(&(pEchoReply->Address)),
+                                addr,
+                                32);
                         avg += pEchoReply->RoundTripTime;
                 } else {
                         free(ReplyBuffer);
@@ -376,7 +396,7 @@ void ServerPreferrer::check_ping(std::string ip_address, int threshold) {
         jt.detach();
 
         bool        should_requeue = true;
-        CVarWrapper cv             = cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
+        CVarWrapper cv = cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
         if (cv) {
                 should_requeue = cv.getBoolValue();
         }
@@ -384,33 +404,40 @@ void ServerPreferrer::check_ping(std::string ip_address, int threshold) {
         HookedEvents::AddHookedEvent(
                 "Function ProjectX.GFxEngine_X.Tick",
                 [this, threshold, should_requeue](...) {
-                        LOG("HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY VARIABLES?: {}",
-                            current_ping_test.load().has_value(),
-                            threshold,
-                            should_requeue);
+                        log::LOG(
+                                "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY "
+                                "VARIABLES?: "
+                                "{}",
+                                current_ping_test.load().has_value(),
+                                threshold,
+                                should_requeue);
                         if (!current_ping_test.load().has_value()) {
                                 // not ready yet. don't do anything.
                                 return;
                         }
 
-                        int ping = (current_ping_test.exchange(std::nullopt)).value();  // I LOVE IT!
+                        int ping = (current_ping_test.exchange(std::nullopt))
+                                           .value();  // I LOVE IT!
 
                         if (ping < 0) {
                                 // an error occurred
-                                LOG("ERROR WHILE RUNNING PING TEST: {}",
-                                    ping == -1   ? "INET_PTON FAILURE"
-                                    : ping == -2 ? "IcmpCreateFile INVALID_HANDLE_VALUE FAILURE"
-                                    : ping == -3 ? "ICMP PING CALL FAILURE"
-                                                 : "UNKNOWN");
+                                log::LOG(
+                                        "ERROR WHILE RUNNING PING TEST: {}",
+                                        ping == -1 ? "INET_PTON FAILURE"
+                                        : ping == -2
+                                                ? "IcmpCreateFile INVALID_HANDLE_VALUE FAILURE"
+                                        : ping == -3 ? "ICMP PING CALL FAILURE"
+                                                     : "UNKNOWN");
 
                                 // don't do anything.
                         } else {
-                                LOG("AVERAGE PING {0:c} THRESHOLD, {1} {0:c} {2}",
-                                    ping > threshold   ? '>'
-                                    : ping < threshold ? '<'
-                                                       : '=',
-                                    ping,
-                                    threshold);
+                                log::LOG(
+                                        "AVERAGE PING {0:c} THRESHOLD, {1} {0:c} {2}",
+                                        ping > threshold   ? '>'
+                                        : ping < threshold ? '<'
+                                                           : '=',
+                                        ping,
+                                        threshold);
 
                                 gameWrapper->LogToChatbox(
                                         std::vformat(
@@ -569,9 +596,12 @@ void ServerPreferrer::RenderSettings() {
                 threshold_cv.setValue(threshold);
         }
 
-        CVarWrapper should_requeue_cv = cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
-        bool        should_requeue    = should_requeue_cv.getBoolValue();
-        if (ImGui::Checkbox("Should requeue automatically after failing ping test?", &should_requeue)) {
+        CVarWrapper should_requeue_cv =
+                cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
+        bool should_requeue = should_requeue_cv.getBoolValue();
+        if (ImGui::Checkbox(
+                    "Should requeue automatically after failing ping test?",
+                    &should_requeue)) {
                 should_requeue_cv.setValue(should_requeue);
         }
 }
