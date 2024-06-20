@@ -6,14 +6,19 @@
 #ifndef _LOGGER_H_
 #define _LOGGER_H_
 
+#include <bitset>
 #include <format>
 #include <source_location>
 #include <string_view>
+
+#include "flagpp/flags.hpp"
 
 #include "bakkesmod/wrappers/cvarmanagerwrapper.h"
 
 // TODO: create a class out of this someday
 // TODO: take from martini's logger (garage organizer thingy)
+
+extern std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
 
 namespace LOGGER {
 namespace {
@@ -21,8 +26,10 @@ namespace {
                 std::string_view     str;
                 std::source_location loc {};
 
+                FormatString(const char * str, const std::source_location & loc = std::source_location::current()) :
+                        str(str), loc(loc) {}
                 FormatString(
-                        const char *                 str,
+                        const std::string &          str,
                         const std::source_location & loc = std::source_location::current()) :
                         str(str), loc(loc) {}
                 FormatString(
@@ -31,11 +38,7 @@ namespace {
                         str(str), loc(loc) {}
 
                 [[nodiscard]] std::string GetLocation() const {
-                        return std::format(
-                                "[{} ({}:{})]",
-                                loc.function_name(),
-                                loc.file_name(),
-                                loc.line());
+                        return std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
                 }
         };
 
@@ -43,8 +46,10 @@ namespace {
                 std::wstring_view    str;
                 std::source_location loc {};
 
+                FormatWString(const wchar_t * str, const std::source_location & loc = std::source_location::current()) :
+                        str(str), loc(loc) {}
                 FormatWString(
-                        const wchar_t *              str,
+                        const std::wstring &         str,
                         const std::source_location & loc = std::source_location::current()) :
                         str(str), loc(loc) {}
                 FormatWString(
@@ -53,11 +58,8 @@ namespace {
                         str(str), loc(loc) {}
 
                 [[nodiscard]] std::wstring GetLocation() const {
-                        auto basic_string = std::format(
-                                "[{} ({}:{})]",
-                                loc.function_name(),
-                                loc.file_name(),
-                                loc.line());
+                        auto basic_string =
+                                std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
                         return std::wstring(basic_string.begin(), basic_string.end());
                 }
         };
@@ -67,36 +69,45 @@ enum class LOGLEVEL {
         INFO,
         DEBUG,
         WARNING,
+#ifdef ERROR
+#undef ERROR
         ERROR,
+#endif
 };
+
 enum class LOGOPTIONS {
-        PERSIST = 1 << 0,  // write out to a file
-        CONSOLE = 1 << 1,  // write out to the bakkesmod console
+        NONE      = 0,
+        PERSIST   = 1 << 0,  // write out to a file
+        CONSOLE   = 1 << 1,  // write out to the bakkesmod console
+        SOURCELOC = 1 << 2,  // include the source location
 };
+}  // namespace LOGGER
 
-LOGLEVEL level = LOGLEVEL::INFO;  // default level
+template<>
+constexpr bool flagpp::enabled<LOGGER::LOGOPTIONS> = true;
 
-extern std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
+namespace LOGGER {
+
+LOGOPTIONS options = LOGOPTIONS::NONE;  // default level of options...
+
 template<typename... Args>
 inline void LOG(const FormatString & format_str, Args &&... args) {
         auto str = std::format(
-                "{} {}",
-                std::vformat(
-                        format_str.str,
-                        std::make_format_args(std::forward<Args>(args)...)),
-                format_str.GetLocation());
-        _globalCVarManager->log(std::vformat(format_str, std::make_format_args(args...)));
+                "{}{}{}",
+                options & LOGOPTIONS::SOURCELOC ? format_str.GetLocation() : "",
+                options & LOGOPTIONS::SOURCELOC ? " " : "",
+                std::vformat(format_str.str, std::make_format_args(std::forward<Args>(args)...)));
+        _globalCVarManager->log(std::move(str));
 }
 
 template<typename... Args>
 inline void LOG(const FormatWString & wformat_str, Args &&... args) {
         auto str = std::format(
-                L"{} {}",
-                std::vformat(
-                        wformat_str.str,
-                        std::make_wformat_args(std::forward<Args>(args)...)),
-                wformat_str.GetLocation());
-        _globalCVarManager->log(std::vformat(wformat_str, std::make_wformat_args(args...)));
+                L"{}{}{}",
+                options & LOGOPTIONS::SOURCELOC ? wformat_str.GetLocation() : "",
+                options & LOGOPTIONS::SOURCELOC ? " " : "",
+                std::vformat(wformat_str.str, std::make_wformat_args(std::forward<Args>(args)...)));
+        _globalCVarManager->log(std::move(str));
 }
 
 };  // namespace LOGGER

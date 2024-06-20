@@ -1,26 +1,27 @@
 {
-		"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-		"dependencies": [
-				"vincentlaucsb-csv-parser"
-		],
-		"vcpkg-configuration" : {
-				"default-registry": {
-						"kind": "git",
-						"baseline": "f7423ee180c4b7f40d43402c2feb3859161ef625",
-						"repository": "https://github.com/microsoft/vcpkg"
-				},
-				"registries": [
-						{
-								"kind": "artifact",
-								"location": "https://github.com/microsoft/vcpkg-ce-catalog/archive/refs/heads/main.zip",
-								"name": "microsoft"
-						}
-				]
-		},
-		"overrides" : [
-				{
-						"name": "implot",
-						"version": "0.3-1"
-				}
-		]
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "vcpkg-configuration": {
+    "default-registry": {
+      "kind": "git",
+      "baseline": "f7423ee180c4b7f40d43402c2feb3859161ef625",
+      "repository": "https://github.com/microsoft/vcpkg"
+    },
+    "registries": [
+      {
+        "kind": "artifact",
+        "location": "https://github.com/microsoft/vcpkg-ce-catalog/archive/refs/heads/main.zip",
+        "name": "microsoft"
+      }
+    ]
+  },
+  "dependencies": [
+    "flagpp",
+    "vincentlaucsb-csv-parser"
+  ],
+  "overrides": [
+    {
+      "name": "implot",
+      "version": "0.3-1"
+    }
+  ]
 }
