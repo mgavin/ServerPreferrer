@@ -4,9 +4,9 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <expected>
 #include <fstream>
 #include <memory>
-#include <optional>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -23,23 +23,41 @@
 
 namespace {
 namespace log = LOGGER;
-}
 
-class ServerPreferrer :
-      public BakkesMod::Plugin::BakkesModPlugin,
-      public BakkesMod::Plugin::PluginSettingsWindow {
+enum class PING_TEST_ERROR {
+      NOT_READY,
+      INET_PTON_FAILURE,
+      IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE,
+      NO_MEMORY_REPLY_BUFFER,
+      ICMP_PING_CALL_FAILURE,
+      UNKNOWN
+};
+}  // namespace
+
+class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
 private:
       // if I had a "cvar manager", I'd bake this prefix in.
       static inline const std::string cmd_prefix = "sp_";
 
       // saving data to a file
-      const std::filesystem::path RECORD_FP = gameWrapper->GetDataFolder().append(
-            "ServerPreferrer\\ServerJoiningRecords.csv");
+      const std::filesystem::path RECORD_FP =
+            gameWrapper->GetDataFolder().append("ServerPreferrer\\ServerJoiningRecords.csv");
+
+      // Launch.log file data
+      static inline const std::filesystem::path launch_log_path = []() {
+            char home_drive[128] = {0};
+            char home_path[128]  = {0};
+            GetEnvironmentVariableA("HOMEDRIVE", home_drive, 128);
+            GetEnvironmentVariableA("HOMEPATH", home_path, 128);
+            return std::string(home_drive) + std::string(home_path)
+                   + "/Documents/My Games/Rocket League/TAGame/Logs/Launch.log";
+      }();
+      std::ifstream launch_file;
 
       // time
-      const std::string DATETIME_FORMAT_STR           = "{0:%F}T{0:%T%z}";
-      const std::string DATETIME_PARSE_STR            = "%FT%T%z";
-      static inline const std::chrono::time_zone * tz = std::chrono::current_zone();
+      const std::string                            DATETIME_FORMAT_STR = "{0:%F}T{0:%T%z}";
+      const std::string                            DATETIME_PARSE_STR  = "%FT%T%z";
+      static inline const std::chrono::time_zone * tz                  = std::chrono::current_zone();
 
       // ROCKET LEAGUE'S WINDOW HANDLE!~
       // https://freebasic.net/forum/viewtopic.php?t=4863
@@ -62,18 +80,7 @@ private:
       }();
 
       // for the threading
-      std::atomic<std::optional<int>> current_ping_test;
-
-      // launch log file data
-      static inline const std::filesystem::path launch_log_path = []() {
-            char home_drive[128] = {0};
-            char home_path[128]  = {0};
-            GetEnvironmentVariableA("HOMEDRIVE", home_drive, 128);
-            GetEnvironmentVariableA("HOMEPATH", home_path, 128);
-            return std::string(home_drive) + std::string(home_path)
-                   + "/Documents/My Games/Rocket League/TAGame/Logs/Launch.log";
-      }();
-      std::ifstream launch_file;
+      std::atomic<std::expected<int, PING_TEST_ERROR>> current_ping_test;
 
       // server data
       struct server_info {
@@ -87,6 +94,12 @@ private:
       };
       std::deque<server_info> server_entries;
 
+      // ping data
+      int ping_threshold = 0;
+
+      // flags
+      bool should_requeue_after_cancel = false;
+
       // initialization related functions
       void init_cvars();
       void init_hooked_events();
@@ -98,7 +111,7 @@ private:
       void disable_plugin();
 
       bool check_launch_log(std::streamoff start_read);
-      void check_connection(server_info server, int threshold);
+      void check_server_connection(server_info server);
       bool is_valid_game_mode(PlaylistId playid);
       int  check_ping(std::string ip_address);
 

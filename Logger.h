@@ -22,64 +22,66 @@ extern std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
 
 namespace LOGGER {
 namespace {
-        struct FormatString {
-                std::string_view     str;
-                std::source_location loc {};
+      struct FormatString {
+            std::string_view     str;
+            std::source_location loc {};
 
-                FormatString(const char * str, const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
-                FormatString(
-                        const std::string &          str,
-                        const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
-                FormatString(
-                        const std::string &&         str,
-                        const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
+            FormatString(const char * str, const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
+            FormatString(const std::string & str, const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
+            FormatString(const std::string && str, const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
 
-                [[nodiscard]] std::string GetLocation() const {
-                        return std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
-                }
-        };
+            [[nodiscard]] std::string GetLocation() const {
+                  return std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
+            }
+      };
 
-        struct FormatWString {
-                std::wstring_view    str;
-                std::source_location loc {};
+      struct FormatWString {
+            std::wstring_view    str;
+            std::source_location loc {};
 
-                FormatWString(const wchar_t * str, const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
-                FormatWString(
-                        const std::wstring &         str,
-                        const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
-                FormatWString(
-                        const std::wstring &&        str,
-                        const std::source_location & loc = std::source_location::current()) :
-                        str(str), loc(loc) {}
+            FormatWString(const wchar_t * str, const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
+            FormatWString(
+                  const std::wstring &         str,
+                  const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
+            FormatWString(
+                  const std::wstring &&        str,
+                  const std::source_location & loc = std::source_location::current()) :
+                  str(str), loc(loc) {}
 
-                [[nodiscard]] std::wstring GetLocation() const {
-                        auto basic_string =
-                                std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
-                        return std::wstring(basic_string.begin(), basic_string.end());
-                }
-        };
+            [[nodiscard]] std::wstring GetLocation() const {
+                  auto basic_string = std::format("[{} ({}:{})]", loc.function_name(), loc.file_name(), loc.line());
+                  return std::wstring(basic_string.begin(), basic_string.end());
+            }
+      };
 }  // namespace
 
-enum class LOGLEVEL {
-        INFO,
-        DEBUG,
-        WARNING,
-#ifdef ERROR
+#ifdef _WIN32
+// ERROR macro is defined in Windows header
+// To avoid conflict between these macro and declaration of ERROR / DEBUG in SEVERITY enum
+// We save macro and undef it
+#pragma push_macro("ERROR")
+#pragma push_macro("DEBUG")
 #undef ERROR
-        ERROR,
+#undef DEBUG
 #endif
+
+enum class LOGLEVEL {
+      INFO,
+      DEBUG,
+      WARNING,
+      ERROR,
 };
 
 enum class LOGOPTIONS {
-        NONE      = 0,
-        PERSIST   = 1 << 0,  // write out to a file
-        CONSOLE   = 1 << 1,  // write out to the bakkesmod console
-        SOURCELOC = 1 << 2,  // include the source location
+      NONE      = 0,
+      PERSIST   = 1 << 0,  // write out to a file
+      CONSOLE   = 1 << 1,  // write out to the bakkesmod console
+      SOURCELOC = 1 << 2,  // include the source location
 };
 }  // namespace LOGGER
 
@@ -92,24 +94,30 @@ LOGOPTIONS options = LOGOPTIONS::NONE;  // default level of options...
 
 template<typename... Args>
 inline void LOG(const FormatString & format_str, Args &&... args) {
-        auto str = std::format(
-                "{}{}{}",
-                options & LOGOPTIONS::SOURCELOC ? format_str.GetLocation() : "",
-                options & LOGOPTIONS::SOURCELOC ? " " : "",
-                std::vformat(format_str.str, std::make_format_args(std::forward<Args>(args)...)));
-        _globalCVarManager->log(std::move(str));
+      auto str = std::format(
+            "{}{}{}",
+            options & LOGOPTIONS::SOURCELOC ? format_str.GetLocation() : "",
+            options & LOGOPTIONS::SOURCELOC ? " " : "",
+            std::vformat(format_str.str, std::make_format_args(std::forward<Args>(args)...)));
+      _globalCVarManager->log(std::move(str));
 }
 
 template<typename... Args>
 inline void LOG(const FormatWString & wformat_str, Args &&... args) {
-        auto str = std::format(
-                L"{}{}{}",
-                options & LOGOPTIONS::SOURCELOC ? wformat_str.GetLocation() : "",
-                options & LOGOPTIONS::SOURCELOC ? " " : "",
-                std::vformat(wformat_str.str, std::make_wformat_args(std::forward<Args>(args)...)));
-        _globalCVarManager->log(std::move(str));
+      auto str = std::format(
+            L"{}{}{}",
+            options & LOGOPTIONS::SOURCELOC ? wformat_str.GetLocation() : "",
+            options & LOGOPTIONS::SOURCELOC ? " " : "",
+            std::vformat(wformat_str.str, std::make_wformat_args(std::forward<Args>(args)...)));
+      _globalCVarManager->log(std::move(str));
 }
 
 };  // namespace LOGGER
+
+#ifdef _WIN32
+// We restore the ERROR Windows macro
+#pragma pop_macro("ERROR")
+#pragma pop_macro("DEBUG")
+#endif
 
 #endif
