@@ -107,6 +107,7 @@ void ServerPreferrer::init_cvars() {
 /// :)
 /// </summary>
 void ServerPreferrer::enable_plugin() {
+      plugin_enabled = true;
       init_hooked_events();
 }
 
@@ -114,6 +115,7 @@ void ServerPreferrer::enable_plugin() {
 /// :)
 /// </summary>
 void ServerPreferrer::disable_plugin() {
+      plugin_enabled = false;
       HookedEvents::RemoveAllHooks();
 }
 
@@ -149,7 +151,7 @@ void ServerPreferrer::init_hooked_events() {
                   HookedEvents::AddHookedEvent(
                         "Function Engine.DateTime.EpochNow",
                         [this, start](std::string eventName) {
-                              if (check_launch_log(start)) {
+                              if (check_launch_log(start) && plugin_enabled) {
                                     // if we got what we wanted, we'll have a new
                                     // server entry which is the server we're trying
                                     // to connect to
@@ -161,8 +163,7 @@ void ServerPreferrer::init_hooked_events() {
       HookedEvents::AddHookedEvent(
             "Function "
             "ProjectX.OnlineGameMatchmakingBase_X.OnSearchComplete",
-            [this](std::string eventName) {
-                  // stop reading the end of the Launch.log file
+            [this](std::string eventName) {  // stop reading the end of the Launch.log file
                   launch_file.close();
                   HookedEvents::RemoveHook("Function Engine.DateTime.EpochNow");
                   // LOG("log file closed");
@@ -245,8 +246,8 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
       return false;
 }
 
-static void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::expected<int, PING_TEST_ERROR>> & out) {
-      out = std::unexpected(PING_TEST_ERROR::NOT_READY);
+static void time_icmp_ping(std::string pingaddr, int times, std::atomic<ConnectionState> & out) {
+      out = std::unexpected(CONNECTION_STATUS::NOT_READY);
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
       HANDLE        hIcmpFile;
       unsigned long ip_addr  = INADDR_NONE;
@@ -256,13 +257,13 @@ static void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::exp
 
       inet_pton(AF_INET, ipaddr.c_str(), reinterpret_cast<void *>(&ip_addr));
       if (ip_addr == INADDR_NONE) {
-            out = std::unexpected(PING_TEST_ERROR::INET_PTON_FAILURE);
+            out = std::unexpected(CONNECTION_STATUS::INET_PTON_FAILURE);
             return;
       }
 
       hIcmpFile = IcmpCreateFile();
       if (hIcmpFile == INVALID_HANDLE_VALUE) {
-            out = std::unexpected(PING_TEST_ERROR::IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE);
+            out = std::unexpected(CONNECTION_STATUS::IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE);
             return;
       }
 
@@ -272,7 +273,7 @@ static void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::exp
       ReplyBuffer        = (VOID *)malloc(ReplySize);
 
       if (ReplyBuffer == NULL) {
-            out = std::unexpected(PING_TEST_ERROR::NO_MEMORY_REPLY_BUFFER);
+            out = std::unexpected(CONNECTION_STATUS::NO_MEMORY_REPLY_BUFFER);
             return;
       }
 
@@ -287,7 +288,7 @@ static void time_icmp_ping(std::string pingaddr, int times, std::atomic<std::exp
                   avg += pEchoReply->RoundTripTime;
             } else {
                   free(ReplyBuffer);
-                  out = std::unexpected(PING_TEST_ERROR::ICMP_PING_CALL_FAILURE);
+                  out = std::unexpected(CONNECTION_STATUS::ICMP_PING_CALL_FAILURE);
                   return;
             }
             i = j;
@@ -389,20 +390,22 @@ bool ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
 void ServerPreferrer::check_server_connection(server_info server) {
       /*** check for playlist ***/
       if (!is_valid_game_mode(static_cast<PlaylistId>(std::stoi(server.playlist_id.c_str())))) {
+            (*current_conn_test).status = CONNECTION_STATUS::INVALID_GAME_MODE;
+            ConnectionState & cs        = current_conn_test.load();
       }
       /*** end check for playlist ***/
 
       /*** check for ping ***/
       // throw a thread outside of the game's thread so it doesn't lag the game.
-      std::jthread jt {time_icmp_ping, server.ping_url, 5, std::ref(current_ping_test)};
+      std::jthread jt {time_icmp_ping, server.ping_url, 5, std::ref(current_conn_test)};
       jt.detach();
 
       // this is purely for checking for ping
       HookedEvents::AddHookedEvent(
             "Function ProjectX.GFxEngine_X.Tick",
             [this](...) {
-                  const std::expected<int, PING_TEST_ERROR> & cpt = current_ping_test.load();
-                  if (cpt.error() == PING_TEST_ERROR::NOT_READY) {
+                  const ConnectionState & ct = current_conn_test.load();
+                  if (ct == CONNECTION_STATUS::NOT_READY || ct == CONNECTION_STATUS::UNKNOWN) {
                         return;
                   }
 
@@ -410,11 +413,11 @@ void ServerPreferrer::check_server_connection(server_info server) {
                         "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY "
                         "VARIABLES?: "
                         "{}",
-                        cpt.has_value(),
+                        ct,
                         ping_threshold,
                         should_requeue_after_cancel);
 
-                  int ping = cpt.value();
+                  int ping = ct.ping;
                   // report
                   if (ping < 0) {
                         // an error occurred
@@ -461,8 +464,8 @@ void ServerPreferrer::check_server_connection(server_info server) {
                         }
                   }
 
-                  // replace with an expeceted with an unready state
-                  current_ping_test.exchange(std::unexpected {PING_TEST_ERROR::NOT_READY});
+                  // replace with an unready state
+                  current_conn_test.exchange(ConnectionState {});
                   // remove the hook that checks for the ping update.
                   HookedEvents::RemoveHook("Function ProjectX.GFxEngine_X.Tick");
             },

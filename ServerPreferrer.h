@@ -24,13 +24,29 @@
 namespace {
 namespace log = LOGGER;
 
-enum class PING_TEST_ERROR {
+enum class CONNECTION_STATUS {
       NOT_READY,
+
+      // pinging-related statuses / errors
       INET_PTON_FAILURE,
       IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE,
       NO_MEMORY_REPLY_BUFFER,
       ICMP_PING_CALL_FAILURE,
+
+      //
+      INVALID_GAME_MODE,
+
+      //
+      SUCCESS,
       UNKNOWN
+};
+
+class ConnectionState {
+public:
+      CONNECTION_STATUS status = CONNECTION_STATUS::UNKNOWN;
+      int               ping   = 0;
+
+      friend bool operator==(const ConnectionState & lhs, const CONNECTION_STATUS & rhs) { return lhs.status == rhs; }
 };
 }  // namespace
 
@@ -80,7 +96,7 @@ private:
       }();
 
       // for the threading
-      std::atomic<std::expected<int, PING_TEST_ERROR>> current_ping_test;
+      std::atomic<ConnectionState> current_conn_test;
 
       // server data
       struct server_info {
@@ -98,6 +114,7 @@ private:
       int ping_threshold = 0;
 
       // flags
+      bool plugin_enabled              = false;
       bool should_requeue_after_cancel = false;
 
       // initialization related functions
