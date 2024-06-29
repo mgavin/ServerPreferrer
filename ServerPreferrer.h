@@ -1,7 +1,6 @@
 #ifndef _SERVERPREFERRER_H_
 #define _SERVERPREFERRER_H_
 
-#include <atomic>
 #include <chrono>
 #include <deque>
 #include <expected>
@@ -50,10 +49,20 @@ public:
 };
 }  // namespace
 
+// registerCvar([req] name,[req] default_value,[req] description, searchable, has_min, min, has_max, max, save_to_cfg)
+#define LIST_OF_PLUGIN_CVARS                                                                             \
+      X(enabled, "1", "Global flag to determine if plugin functions", false)                             \
+      X(check_server_ping, "1", "Check the server ping before connecting?", false)                       \
+      X(server_ping_threshold, "40", "Ping threshold for a server connection", false, true, 0)           \
+      X(should_requeue_after_ping_test, "1", "Should plugin try to requeue if failed ping test?", false) \
+      X(should_focus_on_success, "1", "Make sure game window is focused on success", false);
+#include "CVarManager.h"
+#undef LIST_OF_PLUGIN_CVARS
+
 class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
 private:
-      // if I had a "cvar manager", I'd bake this prefix in.
-      static inline const std::string cmd_prefix = "sp_";
+      // CVAR MANAGER
+      std::unique_ptr<CVarManager> cvm;
 
       // saving data to a file
       const std::filesystem::path RECORD_FP =
@@ -95,9 +104,6 @@ private:
             return hWnd;
       }();
 
-      // for the threading
-      std::atomic<ConnectionState> current_conn_test;
-
       // server data
       struct server_info {
             // join* entries  are unnecessary for my purposes
@@ -116,6 +122,8 @@ private:
       // flags
       bool plugin_enabled              = false;
       bool should_requeue_after_cancel = false;
+      bool should_focus_on_success     = true;
+      bool check_server_ping           = false;
 
       // initialization related functions
       void init_cvars();
@@ -128,9 +136,11 @@ private:
       void disable_plugin();
 
       bool check_launch_log(std::streamoff start_read);
+
       void check_server_connection(server_info server);
-      bool is_valid_game_mode(PlaylistId playid);
-      int  check_ping(std::string ip_address);
+
+      std::expected<bool, CONNECTION_STATUS> is_valid_game_mode(PlaylistId playid);
+      int                                    check_ping(std::string ip_address);
 
       // deque func
       server_info get_first_server_entry();

@@ -19,6 +19,9 @@
     <Filter Include="IMGUI">
       <UniqueIdentifier>{1bf6b855-36f0-41be-80c8-3840eecaf262}</UniqueIdentifier>
     </Filter>
+    <Filter Include="CMAP">
+      <UniqueIdentifier>{4287bc7c-c03b-4df3-8034-9a10fab928d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="vs_property_pages\BakkesMod.props" />
@@ -63,9 +66,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(RootNamespace).h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Logger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="HookedEvents.h">
@@ -115,6 +115,15 @@
     </ClInclude>
     <ClInclude Include="$(BakkesModPath)\bakkesmodsdk\include\bakkesmod\imgui\imstb_truetype.h">
       <Filter>IMGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="Logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CVarManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="cmap\include\cmap.hpp">
+      <Filter>CMAP</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

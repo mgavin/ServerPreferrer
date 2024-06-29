@@ -15,11 +15,12 @@
 
 #include "ServerPreferrer.h"
 
-#include <atomic>
 #include <chrono>
+#include <future>
 #include <optional>
 #include <regex>
 #include <thread>
+#include <variant>
 
 // clang-format off
 #ifndef WIN32_LEAN_AND_MEAN
@@ -45,24 +46,36 @@
 #include "HookedEvents.h"
 #include "Logger.h"
 
-namespace {  // ASSEMBLE LOGGER
+namespace {
+#ifdef _WIN32
+// ERROR macro is defined in Windows header
+// To avoid conflict between these macro and declaration of ERROR / DEBUG in SEVERITY enum
+// We save macro and undef it
+#pragma push_macro("ERROR")
+#pragma push_macro("DEBUG")
+#undef ERROR
+#undef DEBUG
+#endif
+
 namespace log = LOGGER;
-}
+};  // namespace
 
 BAKKESMOD_PLUGIN(ServerPreferrer, "ServerPreferrer", "0.0.0", /*UNUSED*/ NULL);
-std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
 
 /// <summary>
 /// do the following when your plugin is loadedx
 /// </summary>
 void ServerPreferrer::onLoad() {
       // initialize things
-      _globalCVarManager        = cvarManager;
       HookedEvents::gameWrapper = gameWrapper;
 
+      // set up logging necessities
+      log::set_cvarmanager(cvarManager);
+      log::set_loglevel(log::LOGLEVEL::INFO);
+
+      cvm = std::make_unique<CVarManager>("sp_", cvarManager);
+
       init_cvars();
-      cvarManager->getCvar(cmd_prefix + "enabled").notify();
-      cvarManager->getCvar(cmd_prefix + "server_ping_threshold").notify();
       init_data();
 }
 
@@ -70,12 +83,7 @@ void ServerPreferrer::onLoad() {
 /// group together the initialization of cvars
 /// </summary>
 void ServerPreferrer::init_cvars() {
-      CVarWrapper enabled_cv = cvarManager->registerCvar(
-            cmd_prefix + "enabled",
-            "1",
-            "global flag to determine if plugin functions",
-            false);
-      enabled_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
+      cvm->getCVar_enabled().addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
             if (newValue.getBoolValue()) {
                   enable_plugin();
             } else {
@@ -83,24 +91,19 @@ void ServerPreferrer::init_cvars() {
             }
       });
 
-      CVarWrapper threshold_cv = cvarManager->registerCvar(
-            cmd_prefix + "server_ping_threshold",
-            "40",
-            "ping threshold for a server connection",
-            false,
-            true,
-            0);
-      threshold_cv.addOnValueChanged(
+      cvm->getCVar_server_ping_threshold().addOnValueChanged(
             [this](std::string oldValue, CVarWrapper newValue) { ping_threshold = newValue.getIntValue(); });
 
-      CVarWrapper should_requeue_cv = cvarManager->registerCvar(
-            cmd_prefix + "should_requeue_after_ping_test",
-            "1",
-            "should plugin try to requeue if failed ping test?",
-            false);
-      should_requeue_cv.addOnValueChanged([this](std::string oldValue, CVarWrapper newValue) {
-            should_requeue_after_cancel = newValue.getBoolValue();
-      });
+      cvm->getCVar_check_server_ping().addOnValueChanged(
+            [this](std::string oldValue, CVarWrapper newValue) { check_server_ping = newValue.getBoolValue(); });
+
+      cvm->getCVar_should_requeue_after_ping_test().addOnValueChanged(
+            [this](std::string oldValue, CVarWrapper newValue) {
+                  should_requeue_after_cancel = newValue.getBoolValue();
+            });
+
+      cvm->getCVar_should_focus_on_success().addOnValueChanged(
+            [this](std::string oldValue, CVarWrapper newValue) { should_focus_on_success = newValue.getBoolValue(); });
 }
 
 /// <summary>
@@ -246,25 +249,20 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
       return false;
 }
 
-static void time_icmp_ping(std::string pingaddr, int times, std::atomic<ConnectionState> & out) {
-      out = std::unexpected(CONNECTION_STATUS::NOT_READY);
+static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr, int times) {
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
       HANDLE        hIcmpFile;
       unsigned long ip_addr  = INADDR_NONE;
       DWORD         dwRetVal = 0;
 
-      std::string ipaddr = pingaddr.substr(0, pingaddr.find(":"));  // exclude port part
-
-      inet_pton(AF_INET, ipaddr.c_str(), reinterpret_cast<void *>(&ip_addr));
+      inet_pton(AF_INET, pingaddr.c_str(), reinterpret_cast<void *>(&ip_addr));
       if (ip_addr == INADDR_NONE) {
-            out = std::unexpected(CONNECTION_STATUS::INET_PTON_FAILURE);
-            return;
+            return std::unexpected(CONNECTION_STATUS::INET_PTON_FAILURE);
       }
 
       hIcmpFile = IcmpCreateFile();
       if (hIcmpFile == INVALID_HANDLE_VALUE) {
-            out = std::unexpected(CONNECTION_STATUS::IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE);
-            return;
+            return std::unexpected(CONNECTION_STATUS::IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE);
       }
 
       char   SendData[1] = {'\0'};
@@ -273,8 +271,7 @@ static void time_icmp_ping(std::string pingaddr, int times, std::atomic<Connecti
       ReplyBuffer        = (VOID *)malloc(ReplySize);
 
       if (ReplyBuffer == NULL) {
-            out = std::unexpected(CONNECTION_STATUS::NO_MEMORY_REPLY_BUFFER);
-            return;
+            return std::unexpected(CONNECTION_STATUS::NO_MEMORY_REPLY_BUFFER);
       }
 
       int avg = 0;
@@ -288,19 +285,18 @@ static void time_icmp_ping(std::string pingaddr, int times, std::atomic<Connecti
                   avg += pEchoReply->RoundTripTime;
             } else {
                   free(ReplyBuffer);
-                  out = std::unexpected(CONNECTION_STATUS::ICMP_PING_CALL_FAILURE);
-                  return;
+                  return std::unexpected(CONNECTION_STATUS::ICMP_PING_CALL_FAILURE);
             }
             i = j;
       }
 
       free(ReplyBuffer);
-      out = avg / i;
+      return (avg / i);
 }
 
 /*
 * Unused for right now.
-void try_tcp_ping(std::string ipaddr, std::string port) {
+void try_tcp_ping(std::string pingaddr, std::string port) {
         // TRY TO CONNECT WITH TCP!~
         WSADATA wsaData;
         int     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -319,7 +315,7 @@ void try_tcp_ping(std::string ipaddr, std::string port) {
 
         sockaddr_in connection;
         connection.sin_family = AF_INET;
-        inet_pton(AF_INET, ipaddr.c_str(), reinterpret_cast<void
+        inet_pton(AF_INET, pingaddr.c_str(), reinterpret_cast<void
 *>(&connection.sin_addr.s_addr)); connection.sin_port = htons(std::stoi(port));
 
         for (int i = 0; i < 5; ++i) {
@@ -360,7 +356,7 @@ t1).count());
  * \param playid The ID of the game's playlist
  *
  */
-bool ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
+std::expected<bool, CONNECTION_STATUS> ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
       // big assumption this playlist id is an actual playlist id
 
       // if (std::ranges::contains(
@@ -388,36 +384,73 @@ bool ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
 /// <param name="server"></param>
 /// <param name="threshold"></param>
 void ServerPreferrer::check_server_connection(server_info server) {
-      /*** check for playlist ***/
-      if (!is_valid_game_mode(static_cast<PlaylistId>(std::stoi(server.playlist_id.c_str())))) {
-            (*current_conn_test).status = CONNECTION_STATUS::INVALID_GAME_MODE;
-            ConnectionState & cs        = current_conn_test.load();
-      }
-      /*** end check for playlist ***/
-
-      /*** check for ping ***/
       // throw a thread outside of the game's thread so it doesn't lag the game.
-      std::jthread jt {time_icmp_ping, server.ping_url, 5, std::ref(current_conn_test)};
-      jt.detach();
+      std::string pingaddr = server.ping_url;
+      pingaddr             = pingaddr.substr(0, pingaddr.find(":"));
+
+      /*
+       *
+       * NEED TO THINK ABOUT THIS SECTION LATER UGGHHHHHHHHHHH
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       */
+
+      using ping_t  = std::future<std::expected<int, CONNECTION_STATUS>>;
+      using valid_t = std::future<std::expected<bool, CONNECTION_STATUS>>;
+      std::vector<std::variant<ping_t, valid_t>> checks;
+
+      if (check_server_ping) {
+            checks.emplace_back(std::async(std::launch::async, time_icmp_ping, pingaddr, 5));
+      }
+
+      checks.emplace_back(std::async(
+            std::launch::async,
+            &ServerPreferrer::is_valid_game_mode,
+            this,
+            static_cast<PlaylistId>(std::stoi(server.playlist_id))));
 
       // this is purely for checking for ping
       HookedEvents::AddHookedEvent(
             "Function ProjectX.GFxEngine_X.Tick",
-            [this](...) {
-                  const ConnectionState & ct = current_conn_test.load();
-                  if (ct == CONNECTION_STATUS::NOT_READY || ct == CONNECTION_STATUS::UNKNOWN) {
-                        return;
+            [&](...) {
+                  for (const auto & check : checks) {
+                        ping_t             pr;  // ping result
+                        valid_t            vr;  // valid result
+                        std::future_status fs;
+                        int                crud;
+                        using namespace std::chrono_literals;
+                        try {
+                              std::get<ping_t>(check)._Get_value().value();
+                              fs = prs.wait_for(
+                                    // std::chrono::duration<std::chrono::seconds::rep, std::chrono::seconds::period>
+                                    // {0});
+                                    0s);
+                              if (fs == std::future_status::ready) {
+                                    prs.
+                              }
+                        } catch (const std::bad_variant_access &) {
+                              const valid_t & vts = std::get<valid_t>(check);
+                        }
                   }
 
                   log::LOG(
                         "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY "
                         "VARIABLES?: "
                         "{}",
-                        ct,
+                        crud,
                         ping_threshold,
                         should_requeue_after_cancel);
 
-                  int ping = ct.ping;
+                  int ping = crud;
                   // report
                   if (ping < 0) {
                         // an error occurred
@@ -464,8 +497,15 @@ void ServerPreferrer::check_server_connection(server_info server) {
                         }
                   }
 
-                  // replace with an unready state
-                  current_conn_test.exchange(ConnectionState {});
+                  if (should_focus_on_success) {
+                        // idk if I need to check for states to determine what nCmdShow should be...
+                        // if (IsIconic(rl_hwnd)) {
+                        //      // means the rocket league window is minimized
+                        //      ShowWindowAsync(rl_hwnd, SW_RESTORE);
+                        //}
+                        ShowWindowAsync(rl_hwnd, SW_RESTORE);
+                  }
+
                   // remove the hook that checks for the ping update.
                   HookedEvents::RemoveHook("Function ProjectX.GFxEngine_X.Tick");
             },
@@ -586,23 +626,36 @@ static inline void TextURL(  // NOLINT
 /// settings, this will be used instead.
 /// </summary>
 void ServerPreferrer::RenderSettings() {
-      CVarWrapper enabled_cv     = cvarManager->getCvar(cmd_prefix + "enabled");
-      bool        plugin_enabled = enabled_cv.getBoolValue();
+      bool plugin_enabled = cvm->getCVar_enabled().getBoolValue();
       if (ImGui::Checkbox("Enable Plugin", &plugin_enabled)) {
-            enabled_cv.setValue(plugin_enabled);
+            cvm->getCVar_enabled().setValue(plugin_enabled);
       }
 
-      CVarWrapper threshold_cv = cvarManager->getCvar(cmd_prefix + "server_ping_threshold");
-      int         threshold    = threshold_cv.getIntValue();
-      if (ImGui::SliderInt("Maximum allowed ping to server.", &threshold, 0, 400)) {
-            threshold = std::clamp(threshold, 0, 400);
-            threshold_cv.setValue(threshold);
-      }
+      ImGuiTabBarFlags tbf = ImGuiTabBarFlags_NoCloseWithMiddleMouseButton;
+      if (ImGui::BeginTabBar("##tabbar", tbf)) {
+            if (ImGui::BeginTabItem("Options", 0, ImGuiTabItemFlags_NoCloseButton | ImGuiTabItemFlags_SetSelected)) {
+                  ImGui::TextUnformatted("I'm in a tab!");
+                  int threshold = cvm->getCVar_server_ping_threshold().getIntValue();
+                  if (ImGui::SliderInt("Maximum allowed ping to server.", &threshold, 0, 400)) {
+                        threshold = std::clamp(threshold, 0, 400);
+                        cvm->getCVar_server_ping_threshold().setValue(threshold);
+                  }
 
-      CVarWrapper should_requeue_cv = cvarManager->getCvar(cmd_prefix + "should_requeue_after_ping_test");
-      bool        should_requeue    = should_requeue_cv.getBoolValue();
-      if (ImGui::Checkbox("Should requeue automatically after failing ping test?", &should_requeue)) {
-            should_requeue_cv.setValue(should_requeue);
+                  bool check_ping = cvm->getCVar_check_server_ping().getBoolValue();
+                  if (ImGui::Checkbox("Check the server ping before connecting?", &check_ping)) {
+                        cvm->getCVar_check_server_ping().setValue(check_ping);
+                  }
+
+                  bool should_requeue = cvm->getCVar_should_requeue_after_ping_test().getBoolValue();
+                  if (ImGui::Checkbox("Should requeue automatically after failing ping test?", &should_requeue)) {
+                        cvm->getCVar_should_requeue_after_ping_test().setValue(should_requeue);
+                  }
+
+                  bool should_focus = cvm->getCVar_should_focus_on_success().getBoolValue();
+                  if (ImGui::Checkbox("Should focus Rocket League on success?", &should_focus)) {
+                        cvm->getCVar_should_focus_on_success().setValue(should_requeue);
+                  }
+            }
       }
 }
 
@@ -695,3 +748,8 @@ bool ServerPreferrer::ShouldBlockInput() {
 /// </summary>
 void ServerPreferrer::onUnload() {
 }
+#ifdef _WIN32
+// We restore the ERROR Windows macro
+#pragma pop_macro("ERROR")
+#pragma pop_macro("DEBUG")
+#endif

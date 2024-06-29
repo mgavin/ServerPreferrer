@@ -365,3 +365,5 @@ FodyWeavers.xsd
 # extras
 compile_commands.json
 vcpkg_installed/
+/CVarManagerSingleton.h
+/PersistentStorage.h

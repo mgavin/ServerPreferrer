@@ -1,12 +1,15 @@
 /*
  * reference:
  * https://github.com/Martinii89/OrganizeMyGarageOpenSource/blob/master/OrganizeMyGarageV2/logging.h
+ *
+ * TODO:
+ *   - get a handle on enums with states / options
+ *   - clean up the namespace? make it more intuitive to use?
  */
 
 #ifndef _LOGGER_H_
 #define _LOGGER_H_
 
-#include <bitset>
 #include <format>
 #include <source_location>
 #include <string_view>
@@ -15,13 +18,18 @@
 
 #include "bakkesmod/wrappers/cvarmanagerwrapper.h"
 
-// TODO: create a class out of this someday
-// TODO: take from martini's logger (garage organizer thingy)
-
-extern std::shared_ptr<CVarManagerWrapper> _globalCVarManager;
-
 namespace LOGGER {
-namespace {
+#ifdef _WIN32
+// ERROR macro is defined in Windows header
+// To avoid conflict between these macro and declaration of ERROR / DEBUG in SEVERITY enum
+// We save macro and undef it
+#pragma push_macro("ERROR")
+#pragma push_macro("DEBUG")
+#undef ERROR
+#undef DEBUG
+#endif
+
+namespace details {
       struct FormatString {
             std::string_view     str;
             std::source_location loc {};
@@ -58,17 +66,7 @@ namespace {
                   return std::wstring(basic_string.begin(), basic_string.end());
             }
       };
-}  // namespace
-
-#ifdef _WIN32
-// ERROR macro is defined in Windows header
-// To avoid conflict between these macro and declaration of ERROR / DEBUG in SEVERITY enum
-// We save macro and undef it
-#pragma push_macro("ERROR")
-#pragma push_macro("DEBUG")
-#undef ERROR
-#undef DEBUG
-#endif
+}  // namespace details
 
 enum class LOGLEVEL {
       INFO,
@@ -86,30 +84,63 @@ enum class LOGOPTIONS {
 }  // namespace LOGGER
 
 template<>
+// NOLINTNEXTLINE
 constexpr bool flagpp::enabled<LOGGER::LOGOPTIONS> = true;
 
 namespace LOGGER {
+// NOLINTBEGIN
+LOGOPTIONS g_options  = LOGOPTIONS::NONE;  // default level of options...
+LOGLEVEL   g_loglevel = LOGLEVEL::ERROR;   // default error level
 
-LOGOPTIONS options = LOGOPTIONS::NONE;  // default level of options...
+// NOLINTEND
+
+std::shared_ptr<CVarManagerWrapper> g_cvarmanager;
+inline void                         set_cvarmanager(std::shared_ptr<CVarManagerWrapper> cmw) {
+      g_cvarmanager = cmw;
+}
+
+inline void set_loglevel(const LOGGER::LOGLEVEL & nl) {
+      g_loglevel = nl;
+}
+
+using details::FormatString;
+using details::FormatWString;
 
 template<typename... Args>
 inline void LOG(const FormatString & format_str, Args &&... args) {
       auto str = std::format(
             "{}{}{}",
-            options & LOGOPTIONS::SOURCELOC ? format_str.GetLocation() : "",
-            options & LOGOPTIONS::SOURCELOC ? " " : "",
+            g_options & LOGOPTIONS::SOURCELOC ? format_str.GetLocation() : "",
+            g_options & LOGOPTIONS::SOURCELOC ? " " : "",
             std::vformat(format_str.str, std::make_format_args(std::forward<Args>(args)...)));
-      _globalCVarManager->log(std::move(str));
+      g_cvarmanager->log(std::move(str));
 }
 
 template<typename... Args>
 inline void LOG(const FormatWString & wformat_str, Args &&... args) {
       auto str = std::format(
             L"{}{}{}",
-            options & LOGOPTIONS::SOURCELOC ? wformat_str.GetLocation() : "",
-            options & LOGOPTIONS::SOURCELOC ? " " : "",
+            g_options & LOGOPTIONS::SOURCELOC ? wformat_str.GetLocation() : L"",
+            g_options & LOGOPTIONS::SOURCELOC ? " " : "",
             std::vformat(wformat_str.str, std::make_wformat_args(std::forward<Args>(args)...)));
-      _globalCVarManager->log(std::move(str));
+      g_cvarmanager->log(std::move(str));
+}
+
+// USING LOGLEVEL
+template<typename... Args>
+inline void LOG(const LOGLEVEL log_level, const FormatString & format_str, Args &&... args) {
+      if (log_level < g_loglevel) {
+            return;
+      }
+      LOG(format_str, std::forward<Args>(args)...);
+}
+
+template<typename... Args>
+inline void LOG(const LOGLEVEL & log_level, const FormatWString & wformat_str, Args &&... args) {
+      if (log_level < g_loglevel) {
+            return;
+      }
+      LOG(wformat_str, std::forward<Args>(args)...);
 }
 
 };  // namespace LOGGER
