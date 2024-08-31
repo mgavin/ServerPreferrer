@@ -249,8 +249,10 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
       return false;
 }
 
-static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr, int times) {
+std::expected<bool, CONNECTION_STATUS> ServerPreferrer::is_good_ping_icmp(std::string pingaddr, int times) {
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
+
+      // do the pings
       HANDLE        hIcmpFile;
       unsigned long ip_addr  = INADDR_NONE;
       DWORD         dwRetVal = 0;
@@ -291,6 +293,9 @@ static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr
       }
 
       free(ReplyBuffer);
+
+      //
+
       return (avg / i);
 }
 
@@ -404,9 +409,7 @@ void ServerPreferrer::check_server_connection(server_info server) {
        *
        */
 
-      using ping_t  = std::future<std::expected<int, CONNECTION_STATUS>>;
-      using valid_t = std::future<std::expected<bool, CONNECTION_STATUS>>;
-      std::vector<std::variant<ping_t, valid_t>> checks;
+      std::vector<std::future<std::expected<bool, CONNECTION_STATUS>>> checks;
 
       if (check_server_ping) {
             checks.emplace_back(std::async(std::launch::async, time_icmp_ping, pingaddr, 5));
@@ -418,27 +421,23 @@ void ServerPreferrer::check_server_connection(server_info server) {
             this,
             static_cast<PlaylistId>(std::stoi(server.playlist_id))));
 
-      // this is purely for checking for ping
+      // this is purely for checking for success
       HookedEvents::AddHookedEvent(
             "Function ProjectX.GFxEngine_X.Tick",
             [&](...) {
-                  for (const auto & check : checks) {
-                        ping_t             pr;  // ping result
-                        valid_t            vr;  // valid result
+                  for (auto & check : checks) {
                         std::future_status fs;
-                        int                crud;
                         using namespace std::chrono_literals;
-                        try {
-                              std::get<ping_t>(check)._Get_value().value();
-                              fs = prs.wait_for(
-                                    // std::chrono::duration<std::chrono::seconds::rep, std::chrono::seconds::period>
-                                    // {0});
-                                    0s);
-                              if (fs == std::future_status::ready) {
-                                    prs.
+                        fs = check.wait_for(
+                              // std::chrono::duration<std::chrono::seconds::rep, std::chrono::seconds::period>
+                              // {0});
+                              0s);
+                        if (fs == std::future_status::ready) {
+                              // KEEP GOING !
+                              if (!check.get().has_value()) {
+                                    // ERROR OCCURRED!
+                                    //  QUIT!
                               }
-                        } catch (const std::bad_variant_access &) {
-                              const valid_t & vts = std::get<valid_t>(check);
                         }
                   }
 

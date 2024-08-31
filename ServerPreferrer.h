@@ -139,8 +139,10 @@ private:
 
       void check_server_connection(server_info server);
 
-      std::expected<bool, CONNECTION_STATUS> is_valid_game_mode(PlaylistId playid);
-      int                                    check_ping(std::string ip_address);
+      // tests
+      using test_t = std::expected<bool, CONNECTION_STATUS>;
+      test_t is_valid_game_mode(PlaylistId playid);
+      test_t is_good_ping_icmp(std::string pingaddr, int times);
 
       // deque func
       server_info get_first_server_entry();
