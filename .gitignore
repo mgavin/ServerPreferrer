@@ -367,3 +367,5 @@ compile_commands.json
 vcpkg_installed/
 /CVarManagerSingleton.h
 /PersistentStorage.h
+/imgui_sugar
+/imgui
