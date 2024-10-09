@@ -6,9 +6,9 @@
 #include "Logger.hpp"
 
 namespace {
-namespace log = LOGGER;
+using log = LOGGER;
 };  // namespace
-extern std::shared_ptr<CVarManagerWrapper> log::g_cvarmanager;
+
 PersistentManagedCVarStorage::PersistentManagedCVarStorage(
       BakkesMod::Plugin::BakkesModPlugin * plugin,
       const std::string &                  storage_file_name,

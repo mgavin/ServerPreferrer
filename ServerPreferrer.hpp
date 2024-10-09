@@ -4,7 +4,6 @@
 #include <chrono>
 #include <deque>
 #include <expected>
-#include <fstream>
 #include <memory>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -23,7 +22,7 @@
 // #include "imgui_helper.hpp"
 
 namespace {
-namespace log = LOGGER;
+using log = LOGGER;
 
 enum class CONNECTION_STATUS {
       NOT_READY,
@@ -63,8 +62,6 @@ constexpr auto plugin_version =
       X(should_focus_on_success, "1", "Make sure game window is focused on success", false);
 
 #include "CVarManager.hpp"  // needs to come _after_ previous define
-
-std::ofstream imdying {"ok.txt"};
 
 class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
 private:

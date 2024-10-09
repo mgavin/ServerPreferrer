@@ -50,9 +50,9 @@
 #include "PersistentManagedCVarStorage.hpp"
 
 namespace {
-namespace log = LOGGER;
-};  // namespace
-extern std::shared_ptr<CVarManagerWrapper> g_cvarmanager;
+using log = LOGGER;
+}
+
 BAKKESMOD_PLUGIN(ServerPreferrer, "ServerPreferrer", plugin_version, /*UNUSED*/ NULL);
 
 /// <summary>
@@ -63,49 +63,18 @@ void ServerPreferrer::onLoad() {
       HookedEvents::gameWrapper = gameWrapper;
 
       // set up logging necessities
-      imdying << std::format(
-            "(BEGINNING OF ONLOAD) CVARMANAGER.GET(): {:X}, COUNTER: {}",
-            reinterpret_cast<uintptr_t>(cvarManager.get()),
-            cvarManager.use_count())
-              << std::endl;
-
       log::set_cvarmanager(cvarManager);
-      log::set_loglevel(log::LOGLEVEL::INFO);
-
-      imdying << std::format(
-            "(AFTER log::set_cvarmanager) G_CVARMANAGER.GET(): {:X}, COUNTER: {}",
-            reinterpret_cast<uintptr_t>(log::g_cvarmanager.get()),
-            log::g_cvarmanager.use_count())
-              << std::endl;
+      log::set_loglevel(LOGLEVEL::INFO);
 
       // set a prefix to attach in front of all cvars to avoid name clashes
       CVarManager::instance().set_cvar_prefix("sp_");  // INCLUDE PLUGIN CVAR PREFIX HERE!!!
       CVarManager::instance().set_cvarmanager(cvarManager);
 
-      imdying << std::format(
-            "(AFTER CVARMANAGER SETS CVARMANAGER) G_CVARMANAGER.GET(): {:X}, COUNTER: {}",
-            reinterpret_cast<uintptr_t>(log::g_cvarmanager.get()),
-            log::g_cvarmanager.use_count())
-              << std::endl;
-
       // MAKE SECOND PARAMETER A SHORT FORM NAME OF THE PLUGIN + "_cvars"
       cvar_storage = std::make_unique<PersistentManagedCVarStorage>(this, "serverpreferrer_cvars", true, true);
 
       init_cvars();
-
-      imdying << std::format(
-            "(AFTER INIT_CVARS) G_CVARMANAGER.GET(): {:X}, COUNTER: {}",
-            reinterpret_cast<uintptr_t>(log::g_cvarmanager.get()),
-            log::g_cvarmanager.use_count())
-              << std::endl;
-
       init_data();
-
-      imdying << std::format(
-            "(AFTER INIT_DATA) G_CVARMANAGER.GET(): {:X}, COUNTER: {}",
-            reinterpret_cast<uintptr_t>(log::g_cvarmanager.get()),
-            log::g_cvarmanager.use_count())
-              << std::endl;
 
       log::log_debug("what the actual fuck?");
       log::log_debug("{}", "I hate this shit");
@@ -401,7 +370,7 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
                   ".*",
                   std::regex::extended | std::regex::icase};
       } catch (const std::exception & e) {
-            log::LOG("REGEX ERROR? HELP! {}", e.what());
+            log::log_error("REGEX ERROR? HELP! {}", e.what());
             return false;
       }
 
@@ -428,7 +397,7 @@ bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
                               .game_url    = server_gameurl.str()
                         });
                         const server_info & sv = server_entries.back();
-                        log::LOG(
+                        log::log_debug(
                               "TIME: {}, SERVER_NAME: {}, PLAYLIST_ID: {}, REGION: "
                               "{}, "
                               "PING_URL: {}, GAME_URL: "

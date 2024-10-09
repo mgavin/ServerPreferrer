@@ -19,7 +19,7 @@
 #include "Logger.hpp"
 
 namespace {
-namespace log = LOGGER;
+using log = LOGGER;
 }
 
 class HookedEvents {
