@@ -429,6 +429,12 @@ namespace details {
             unsigned char status;
       };
 
+      // FPointer
+      // (0x0000 - 0x0004)
+      struct FPointer {
+            uintptr_t Dummy;  // 0x0000 (0x04)
+      };
+
       // FString
       // (0x0000 - 0x0010)
       class FString {
@@ -714,80 +720,337 @@ namespace details {
                   ArrayMax  = newArrayMax;
             }
       };
+
+      class UClass;
+
+      // Class Core.Object
+      // (0x0000 - 0x0034)
+      class UObject {
+      public:
+            FPointer  VfTableObject;
+            FPointer  HashNext;
+            int64_t   ObjectFlags;
+            FPointer  HashOuterNext;
+            FPointer  StateFrame;
+            UObject * Linker;
+            FPointer  LinkerIndex;
+            int32_t   ObjectInternalInteger;
+            int32_t   NetIndex;
+            UObject * Outer;
+            FName     Name;
+            UClass *  Class;
+            UObject * ObjectArchetype;
+      };
+
+      // Class Core.Field
+      // 0x0008 (0x0034 - 0x003C)
+      class UField : public UObject {
+      public:
+            class UField * Next;
+            uint8_t        UnknownData[0x08];
+      };
+
+      // Class Core.Struct
+      // 0x00C8
+      class UStruct : public UField {
+      public:
+            uint8_t  UnknownData00[0x10];  // ? hmm
+            UField * Children;
+            uint32_t PropertySize;
+            int32_t  MinAlignment;
+            uint8_t  UnknownData01[0x98];
+      };
+
+      // Class Core.State
+      // 0x0060 (0x0058 - 0x0118)
+      class UState : public UStruct {
+      public:
+            uint8_t UnknownData00[0x60];
+      };
+
+      // Class Core.Class
+      // 0x0228 (0x0058 - 0x0278)
+      class UClass : public UState {
+      public:
+            uint8_t UnknownData00[0x228];
+      };
+
+      // Class Engine.NetworkEncryptionKey
+      // 0x0040 (0x0060 - 0x00A0)
+      class UNetworkEncryptionKey : public UObject {
+      public:
+            TArray<uint8_t> Key;        // 0x0060 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            TArray<uint8_t> IV;         // 0x0070 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            TArray<uint8_t> HMACKey;    // 0x0080 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            TArray<uint8_t> SessionId;  // 0x0090 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+      };
+
+      // ScriptStruct ProjectX._Types_X.JoinMatchSettings
+      // 0x0020
+      struct FJoinMatchSettings {
+            uint8_t       MatchType;             // 0x0000 (0x0001) [0x0000000000000000]
+            int32_t       PlaylistId;            // 0x0004 (0x0004) [0x0000000000000000]
+            uint32_t      bFriendJoin      : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000001]
+            uint32_t      bMigration       : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000002]
+            uint32_t      bRankedReconnect : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000004]
+            class FString Password;              // 0x0010 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+      };
+
+      // ScriptStruct ProjectX._Types_X.ServerReservationData
+      // 0x0070
+      struct FServerReservationData {
+            FString ServerName;     // 0x0000 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            int32_t Playlist;       // 0x0010 (0x0004) [0x0000000000000000]
+            FString Region;         // 0x0018 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString ReservationID;  // 0x0028 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString DSRToken;       // 0x0038 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            // UNetworkEncryptionKey * Keys;           // 0x0048 (0x0008) [0x0000000000000000]
+            uint8_t padding[0xC0];
+            FString JoinName;      // 0x0050 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString JoinPassword;  // 0x0060 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+      };
+
+      // ScriptStruct ProjectX._Types_X.ActiveServerData
+      // 0x00A0
+      struct FActiveServerData {
+            FServerReservationData Reservation;      // 0x0000 (0x0070) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString                PingURL;          // 0x0070 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString                GameURL;          // 0x0080 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString                JoinCredentials;  // 0x0090 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+      };
+
+      // ScriptStruct ProjectX._Types_X.ClubColorSet
+      // 0x0008
+      struct FClubColorSet {
+            uint8_t  TeamColorID;          // 0x0000 (0x0001) [0x0000000000000000]
+            uint8_t  CustomColorID;        // 0x0001 (0x0001) [0x0000000000000000]
+            uint32_t bTeamColorSet   : 1;  // 0x0004 (0x0004) [0x0000000000000000] [0x00000001]
+            uint32_t bCustomColorSet : 1;  // 0x0004 (0x0004) [0x0000000000000000] [0x00000002]
+      };
+
+      // ScriptStruct ProjectX._Types_X.CustomMatchTeamSettings
+      // 0x001C
+      struct FCustomMatchTeamSettings {
+            FString       Name;       // 0x0000 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FClubColorSet Colors;     // 0x0010 (0x0008) [0x0000000000000000]
+            int32_t       GameScore;  // 0x0018 (0x0004) [0x0000000000000000]
+      };
+
+      // ScriptStruct ProjectX._Types_X.CustomMatchSettings
+      // 0x008C
+      struct FCustomMatchSettings {
+            FString                  GameTags;         // 0x0000 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FName                    MapName;          // 0x0010 (0x0008) [0x0000000000000000]
+            uint8_t                  GameMode;         // 0x0018 (0x0001) [0x0000000000000000]
+            int32_t                  MaxPlayerCount;   // 0x001C (0x0004) [0x0000000000000000]
+            FString                  ServerName;       // 0x0020 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString                  Password;         // 0x0030 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            uint32_t                 bPublic : 1;      // 0x0040 (0x0004) [0x0000000000000000] [0x00000001]
+            FCustomMatchTeamSettings TeamSettings[2];  // 0x0048 (0x0040) [0x0000000000400000] (CPF_NeedCtorLink)
+            uint32_t                 bClubServer : 1;  // 0x0088 (0x0004) [0x0001000000000000] [0x00000001]
+      };
+
+      struct UOnlineGameJoinGame_X_execStartJoin_Params {
+            struct FServerReservationData
+                  Reservation;  // 0x0000 (0x0070) [0x0000000000400080] (CPF_Parm | CPF_NeedCtorLink)
+            struct FJoinMatchSettings JoinSettings;  // 0x0070 (0x0020) [0x0000000000400090] (CPF_OptionalParm |
+                                                     // CPF_Parm | CPF_NeedCtorLink)
+            bool ReturnValue;  // 0x0090 (0x0004) [0x0000000000000580] [0x00000001] (CPF_Parm | CPF_OutParm |
+                               // CPF_ReturnParm)
+            // uint8_t padding[0xF];
+            struct FActiveServerData NewActiveServer;  //
+            // 0x0098 (0x00A0) [0x0000000000400000] (CPF_NeedCtorLink)
+      };
+
+      // Class ProjectX.StateObject_X
+      // 0x0004 (0x0060 - 0x0064)
+      class UStateObject_X : public UObject {
+      public:
+            uint32_t bDebug : 1;  // 0x0060 (0x0004) [0x0000000000000001] [0x00000001] (CPF_Edit)
+      };
+
+      // Class ProjectX.Online_X
+      // 0x004C (0x0064 - 0x00B0)
+      class UOnline_X : public UStateObject_X {
+      public:
+            // class UOnlineSubsystem *
+            //                   OnlineSub;   // 0x0068 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
+            // class UPsyNet_X * PsyNet;      // 0x0070 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
+            // class UOnlineSubsystem * EOS;  // 0x0078 (0x0008) [0x0000008000002000] (CPF_Transient |
+            // CPF_ProtectedWrite) struct FScriptDelegate
+            //         __EventEOSInitialized__Delegate;  // 0x0080 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            // uint8_t __EventEOSInitialized__Delegate_UnknownData00[0x8];  // 0x0088 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // struct FScriptDelegate
+            //         __EventEosInitTimeout__Delegate;  // 0x0098 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            // uint8_t __EventEosInitTimeout__Delegate_UnknownData01[0x8];  // 0x00A0 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            uint8_t padding[0x28];
+      };
+
+      // Class ProjectX.OnlineGameJoinGame_X
+      // 0x03A0 (0x00B0 - 0x0450)
+      class UOnlineGameJoinGame_X : public UOnline_X {
+      public:
+            uint8_t pad[0x20];             // no idea.
+            int32_t JoinCountdownTime;     // 0x00B0 (0x0004) (CPF_Edit)
+            FString FailCommand;           // 0x00B8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
+            FString LoadingScreenCommand;  // 0x00C8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
+            // UShakeComponent_X *
+            //        JoinGameShake;  // 0x00D8 (0x0008) (CPF_Edit | CPF_ExportObject | CPF_Component | CPF_EditInline)
+            uint8_t pad1[0x8];  // covers the above's pointer
+            // UReservationBeacon_X *
+            //        ReservationBeacon;        // 0x00E0 (0x0008) (CPF_ExportObject | CPF_Component | CPF_EditInline)
+            uint8_t pad2[0x8];                       // covers the above's pointer
+            FString WaitingForPlayersString;         // 0x00E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString ReservationNotRespondingString;  // 0x00F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString ReservationFullString;           // 0x0108 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString PartyTeamReservationFullString;  // 0x0118 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString NoFriendJoinPrivateMatchString;  // 0x0128 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString BeaconTimedOutString;            // 0x0138 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString NotAllPlayersJoinedString;       // 0x0148 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString CanceledString;                  // 0x0158 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString SecurityKeyAcquisitionFailed;    // 0x0168 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString SecurityKeyVerificationFailed;   // 0x0178 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString SendingReservationMessage;       // 0x0188 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString JoiningPartyLeadersGame;         // 0x0198 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString InvalidPassword;                 // 0x01A8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString WrongPlaylistString;             // 0x01B8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString WrongRankedMatchString;          // 0x01C8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString MatchEndedString;                // 0x01D8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString CrossplayDisabled;               // 0x01E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString AnotherPlayerCanceled;           // 0x01F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FActiveServerData    ActiveServer;  // 0x0208 (0x00A0) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
+            FJoinMatchSettings   Settings;      // 0x02A8 (0x0020) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
+            FString              PendingFailMessage;  // 0x02C8 (0x0010) (CPF_Transient | CPF_NeedCtorLink)
+            // TArray<UPlayer *>  JoinedPlayers;  // 0x02D8 (0x0010) (CPF_Transient | CPF_NeedCtorLink |
+            // CPF_PrivateWrite)
+            uint8_t              pad3[0x10];   // covers the above's TArray
+            FCustomMatchSettings CustomMatch;  // 0x02E8 (0x0090) (CPF_NeedCtorLink | CPF_PrivateWrite)
+            // FScriptDelegate      __EventJoinGameComplete__Delegate;  // 0x0378 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t
+            //       __EventJoinGameComplete__Delegate_UnknownData00[0x8];  // 0x0380 (0x0008) FIX WRONG SIZE OF
+            //       PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventStatusUpdate__Delegate;               // 0x0390 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t __EventStatusUpdate__Delegate_UnknownData01[0x8];    // 0x0398 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventCountdownStarted__Delegate;           // 0x03A8 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t
+            //       __EventCountdownStarted__Delegate_UnknownData02[0x8];  // 0x03B0 (0x0008) FIX WRONG SIZE OF
+            //       PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventCountdownEnded__Delegate;             // 0x03C0 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t __EventCountdownEnded__Delegate_UnknownData03[0x8];  // 0x03C8 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventActiveServerChanged__Delegate;        // 0x03D8 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t         __EventActiveServerChanged__Delegate_UnknownData04
+            //       [0x8];  // 0x03E0 (0x0008) FIX WRONG SIZE OF PREVIOUS PROPERTY  [Original:0x0018, Missing: 0x0008]
+            // FScriptDelegate __EventServerReserved__Delegate;             // 0x03F0 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t __EventServerReserved__Delegate_UnknownData05[0x8];  // 0x03F8 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventPasswordRequired__Delegate;           // 0x0408 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t
+            //       __EventPasswordRequired__Delegate_UnknownData06[0x8];  // 0x0410 (0x0008) FIX WRONG SIZE OF
+            //       PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventJoiningGame__Delegate;                // 0x0420 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t __EventJoiningGame__Delegate_UnknownData07[0x8];     // 0x0428 (0x0008) FIX WRONG SIZE OF
+            // PREVIOUS
+            //                                                              // PROPERTY  [Original:0x0018, Missing:
+            //                                                              0x0008]
+            // FScriptDelegate __EventMaxPlayersChanged__Delegate;          // 0x0438 (0x0018) (CPF_NeedCtorLink)
+            // uint8_t         __EventMaxPlayersChanged__Delegate_UnknownData08
+            //       [0x8];  // 0x0440 (0x0008) FIX WRONG SIZE OF PREVIOUS PROPERTY  [Original:0x0018, Missing: 0x0008]
+            // uint8_t pad4[0xD8];  // covers the above FScriptDelegate(s)s and their missing unknown data
+      };
+
+      template <> class ArrayWrapper<details::FVoter> {};
+      // Class TAGame.VoteActor_TA
+      // 0x00B0 (0x02C0 - 0x0210)
+      struct AVoteActor_TA : public ActorWrapper {
+            AVoteActor_TA(std::uintptr_t mem) : ActorWrapper(mem) {}
+            AVoteActor_TA(const AVoteActor_TA & other) = default;
+            AVoteActor_TA & operator=(AVoteActor_TA &) = default;
+            ~AVoteActor_TA()                           = default;
+
+            // an FString of 0x0C size.
+            // starts at 0x210 because of ActorWrapper
+            unsigned char subject[0xC];
+
+            int time_remaining;
+
+            unsigned long b_unanimous_vote;
+            unsigned long b_finished;
+
+            ArrayWrapper<details::FVoter> voters;
+            details::FVoter               replicated_voters[0x8];
+
+            // taking a chance here. L13925 in TAGame_classes.h
+            unsigned char __event_started_delegate[0x10];
+            unsigned char __event_voters_changed_delegate[0x10];
+            unsigned char __event_time_remaining_changed_delegate[0x10];
+            unsigned char __event_finished_delegate[0x10];
+            unsigned char __event_destroyed_delegate[0x10];
+
+            void eventDestroyed();
+            void DestroySelf();
+            bool Failed();
+            bool Passed();
+            int  RequiredVotes();
+            int  NoVotes();
+            int  YesVotes();
+            void FinishVote();
+            void CheckFinished();
+            void SetVoteStatus(PriWrapper * PRI, unsigned char Status);
+            void OnVotersChanged();
+            void RemoveVoter(PriWrapper * PRI);
+            void AddVoter(PriWrapper * PRI);
+            void UpdateTimeRemaining();
+            void AddTeam(TeamWrapper * Team);
+            void AddGameEvent(GameEventWrapper * GameEvent);
+            void eventReplicatedEvent(details::FName VarName);
+            void eventPostBeginPlay();
+            void EventDestroyed(AVoteActor_TA * VoteActor);
+            void EventFinished(AVoteActor_TA * VoteActor);
+            void EventTimeRemainingChanged(AVoteActor_TA * VoteActor);
+            void EventVotersChanged(AVoteActor_TA * VoteActor);
+            void EventStarted(AVoteActor_TA * VoteActor);
+
+            // it's 256 bytes so this may work :)
+      };
+
+      struct PartyChangeParams {
+            // IM WORKING WITH VERY OLD OLD DATA!
+            // FUniqueLobbyId party_id; FUniqueLobbyId (is 0x0C bytes)
+            // FUniqueNetId leader_id; FUniqueNetId (is 0x48 bytes)
+            char party_id[0x10];  // 3 MISSING BYTES SOMEWHERE BETWEEN PARTY_ID AND LEADER_ID
+            // SO I JUST PADDED IT OUT IN PARTY_ID. NOW IT WORKS RIGHT.
+            char leader_id[0x48];
+            // FUniqueLobbyId party_id;  // SIZE = 0x09
+            // unsigned char  padding[3];
+            // FUniqueNetId   leader_id;  // SIZE = 0x46
+            // unsigned char  padding2[2];
+
+            unsigned long bLeader;
+            unsigned int  party_size;
+            unsigned int  local_players;
+            unsigned int  remote_players;
+      };
 }  // namespace details
-
-template <> class ArrayWrapper<details::FVoter> {};
-// Class TAGame.VoteActor_TA
-// 0x00B0 (0x02C0 - 0x0210)
-struct AVoteActor_TA : public ActorWrapper {
-      AVoteActor_TA(std::uintptr_t mem) : ActorWrapper(mem) {}
-      AVoteActor_TA(const AVoteActor_TA & other) = default;
-      AVoteActor_TA & operator=(AVoteActor_TA &) = default;
-      ~AVoteActor_TA()                           = default;
-
-      // an FString of 0x0C size.
-      // starts at 0x210 because of ActorWrapper
-      unsigned char subject[0xC];
-
-      int time_remaining;
-
-      unsigned long b_unanimous_vote;
-      unsigned long b_finished;
-
-      ArrayWrapper<details::FVoter> voters;
-      details::FVoter               replicated_voters[0x8];
-
-      // taking a chance here. L13925 in TAGame_classes.h
-      unsigned char __event_started_delegate[0x10];
-      unsigned char __event_voters_changed_delegate[0x10];
-      unsigned char __event_time_remaining_changed_delegate[0x10];
-      unsigned char __event_finished_delegate[0x10];
-      unsigned char __event_destroyed_delegate[0x10];
-
-      void eventDestroyed();
-      void DestroySelf();
-      bool Failed();
-      bool Passed();
-      int  RequiredVotes();
-      int  NoVotes();
-      int  YesVotes();
-      void FinishVote();
-      void CheckFinished();
-      void SetVoteStatus(PriWrapper * PRI, unsigned char Status);
-      void OnVotersChanged();
-      void RemoveVoter(PriWrapper * PRI);
-      void AddVoter(PriWrapper * PRI);
-      void UpdateTimeRemaining();
-      void AddTeam(TeamWrapper * Team);
-      void AddGameEvent(GameEventWrapper * GameEvent);
-      void eventReplicatedEvent(details::FName VarName);
-      void eventPostBeginPlay();
-      void EventDestroyed(AVoteActor_TA * VoteActor);
-      void EventFinished(AVoteActor_TA * VoteActor);
-      void EventTimeRemainingChanged(AVoteActor_TA * VoteActor);
-      void EventVotersChanged(AVoteActor_TA * VoteActor);
-      void EventStarted(AVoteActor_TA * VoteActor);
-
-      // it's 256 bytes so this may work :)
-};
-
-struct PartyChangeParams {
-      // IM WORKING WITH VERY OLD OLD DATA!
-      // FUniqueLobbyId party_id; FUniqueLobbyId (is 0x0C bytes)
-      // FUniqueNetId leader_id; FUniqueNetId (is 0x48 bytes)
-      char party_id[0x10];  // 3 MISSING BYTES SOMEWHERE BETWEEN PARTY_ID AND LEADER_ID
-      // SO I JUST PADDED IT OUT IN PARTY_ID. NOW IT WORKS RIGHT.
-      char leader_id[0x48];
-      // FUniqueLobbyId party_id;  // SIZE = 0x09
-      // unsigned char  padding[3];
-      // FUniqueNetId   leader_id;  // SIZE = 0x46
-      // unsigned char  padding2[2];
-
-      unsigned long bLeader;
-      unsigned int  party_size;
-      unsigned int  local_players;
-      unsigned int  remote_players;
-};
 }  // namespace bm_helper
 
 #endif

@@ -53,7 +53,8 @@ public:
 constexpr auto plugin_version =
       stringify(VERSION_MAJOR) "." stringify(VERSION_MINOR) "." stringify(VERSION_PATCH) "." stringify(VERSION_BUILD);
 
-// registerCvar([req] name,[req] default_value,[req] description, searchable, has_min, min, has_max, max, save_to_cfg)
+// registerCvar([req] name,[req] default_value,[req] description, searchable, has_min,
+// min, has_max, max, save_to_cfg)
 #define LIST_OF_PLUGIN_CVARS                                                                             \
       X(enabled, "1", "Global flag to determine if plugin functions", false)                             \
       X(check_server_ping, "1", "Check the server ping before connecting?", false)                       \
@@ -186,5 +187,4 @@ public:
       // bool        IsActiveOverlay() override;
       // bool        ShouldBlockInput() override;
 };
-
 #endif

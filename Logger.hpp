@@ -91,7 +91,6 @@ private:
       using FormatWString = details::FormatWString;
 
       template <typename... Args> static inline void LOG(const FormatString & format_str, Args &&... args) {
-            g_cvarmanager->log(std::format("format_Str.str: {} ; # of argS: {}", format_str.str, sizeof...(args)));
             auto str = std::format(
                   "{}{}{}",
                   (g_options & LOGOPTIONS::SOURCELOC) ? format_str.GetLocation() : "",
@@ -101,7 +100,6 @@ private:
       }
 
       template <typename... Args> static inline void LOG(const FormatWString & wformat_str, Args &&... args) {
-            g_cvarmanager->log(std::format("# of argS: {}", sizeof...(args)));
             auto str = std::format(
                   L"{}{}{}",
                   (g_options & LOGOPTIONS::SOURCELOC) ? wformat_str.GetLocation() : L"",
@@ -125,7 +123,7 @@ private:
       }
 
 public:
-      static inline void set_cvarmanager(std::shared_ptr<CVarManagerWrapper> cmw) { LOGGER::g_cvarmanager = cmw; }
+      static inline void set_cvarmanager(std::shared_ptr<CVarManagerWrapper> cmw) { g_cvarmanager = cmw; }
       static inline void set_loglevel(const LOGLEVEL & nl) { g_loglevel = nl; }
 
       template <typename... Args> static inline void log_info(const FormatString & format_str, Args &&... args) {
