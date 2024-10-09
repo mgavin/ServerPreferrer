@@ -363,9 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # extras
-compile_commands.json
+*.png
 vcpkg_installed/
-/CVarManagerSingleton.h
-/PersistentStorage.h
-/imgui_sugar
-/imgui
+imgui/
+imgui_sugar/

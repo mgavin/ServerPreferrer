@@ -16,9 +16,11 @@
 #include "bakkesmod/plugin/bakkesmodplugin.h"
 #include "bakkesmod/plugin/pluginsettingswindow.h"
 
-#include "bm_helper.h"
-#include "Logger.h"
-// #include "imgui_helper.h"
+#include "bm_helper.hpp"
+#include "Logger.hpp"
+#include "PersistentManagedCVarStorage.hpp"
+#include "version.h"
+// #include "imgui_helper.hpp"
 
 namespace {
 namespace log = LOGGER;
@@ -49,6 +51,9 @@ public:
 };
 }  // namespace
 
+constexpr auto plugin_version =
+      stringify(VERSION_MAJOR) "." stringify(VERSION_MINOR) "." stringify(VERSION_PATCH) "." stringify(VERSION_BUILD);
+
 // registerCvar([req] name,[req] default_value,[req] description, searchable, has_min, min, has_max, max, save_to_cfg)
 #define LIST_OF_PLUGIN_CVARS                                                                             \
       X(enabled, "1", "Global flag to determine if plugin functions", false)                             \
@@ -56,28 +61,16 @@ public:
       X(server_ping_threshold, "40", "Ping threshold for a server connection", false, true, 0)           \
       X(should_requeue_after_ping_test, "1", "Should plugin try to requeue if failed ping test?", false) \
       X(should_focus_on_success, "1", "Make sure game window is focused on success", false);
-#include "CVarManager.h"
-#undef LIST_OF_PLUGIN_CVARS
+
+#include "CVarManager.hpp"  // needs to come _after_ previous define
+
+std::ofstream imdying {"ok.txt"};
 
 class ServerPreferrer : public BakkesMod::Plugin::BakkesModPlugin, public BakkesMod::Plugin::PluginSettingsWindow {
 private:
-      // CVAR MANAGER
-      std::unique_ptr<CVarManager> cvm;
-
       // saving data to a file
       const std::filesystem::path RECORD_FP =
             gameWrapper->GetDataFolder().append("ServerPreferrer\\ServerJoiningRecords.csv");
-
-      // Launch.log file data
-      static inline const std::filesystem::path launch_log_path = []() {
-            char home_drive[128] = {0};
-            char home_path[128]  = {0};
-            GetEnvironmentVariableA("HOMEDRIVE", home_drive, 128);
-            GetEnvironmentVariableA("HOMEPATH", home_path, 128);
-            return std::string(home_drive) + std::string(home_path)
-                   + "/Documents/My Games/Rocket League/TAGame/Logs/Launch.log";
-      }();
-      std::ifstream launch_file;
 
       // time
       const std::string                            DATETIME_FORMAT_STR = "{0:%F}T{0:%T%z}";
@@ -93,9 +86,9 @@ private:
                   DWORD procID;
                   GetWindowThreadProcessId(hWnd, &procID);
                   if (procID == pid) {
-                        char str[128] = {0};
+                        wchar_t str[128] = {0};
                         GetWindowText(hWnd, str, 128);
-                        if (strstr(str, "Rocket") != NULL) {
+                        if (wcsstr(str, L"Rocket") != NULL) {
                               return hWnd;
                         }
                   };
@@ -103,6 +96,8 @@ private:
             }
             return hWnd;
       }();
+
+      std::unique_ptr<PersistentManagedCVarStorage> cvar_storage;
 
       // server data
       struct server_info {
@@ -119,11 +114,18 @@ private:
       // ping data
       int ping_threshold = 0;
 
+      std::string last_map_command;
+
       // flags
       bool plugin_enabled              = false;
       bool should_requeue_after_cancel = false;
       bool should_focus_on_success     = true;
       bool check_server_ping           = false;
+
+      struct base_param_type {
+            bm_helper::details::FString command;
+            bool                        write_to_log : 1;
+      };
 
       // initialization related functions
       void init_cvars();
@@ -137,20 +139,31 @@ private:
 
       bool check_launch_log(std::streamoff start_read);
 
-      void check_server_connection(server_info server);
+      // void check_server_connection(server_info server);
 
       // tests
       using test_t = std::expected<bool, CONNECTION_STATUS>;
       test_t is_valid_game_mode(PlaylistId playid);
       test_t is_good_ping_icmp(std::string pingaddr, int times);
 
-      // deque func
+      // deque fns
       server_info get_first_server_entry();
       server_info get_last_server_entry();
 
-      // chrono func
+      // time fns
       std::string                get_current_datetime_str();
       std::chrono::zoned_seconds get_timepoint_from_str(std::string);
+
+      template <
+            typename ParamType,
+            typename CallerWrapper,
+            typename std::enable_if_t<std::is_base_of_v<ObjectWrapper, CallerWrapper>> * = nullptr>
+      inline void capture_console_fn(CallerWrapper cw, void * params, std::string eventName);
+
+      template <
+            typename CallerWrapper,
+            typename std::enable_if_t<std::is_base_of_v<ObjectWrapper, CallerWrapper>> * = nullptr>
+      inline void capture_logging_fn(CallerWrapper cw, void * params, std::string eventName);
 
 public:
       // honestly, for the sake of inheritance,

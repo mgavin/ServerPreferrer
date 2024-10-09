@@ -1,5 +1,14 @@
-#ifndef _HOOKEDEVENTS_H_
-#define _HOOKEDEVENTS_H_
+/*
+ * TODO:
+ *       Maybe be able to access hooked events
+ *       Maybe return hooked events so they're accessible after initialization?
+ *
+ *
+ *
+ */
+
+#ifndef _HOOKEDEVENTS_HPP_
+#define _HOOKEDEVENTS_HPP_
 
 #include <regex>
 #include <string>
@@ -7,7 +16,7 @@
 
 #include "bakkesmod/wrappers/gamewrapper.h"
 
-#include "Logger.h"
+#include "Logger.hpp"
 
 namespace {
 namespace log = LOGGER;
@@ -53,7 +62,7 @@ public:
 
       static std::shared_ptr<GameWrapper> gameWrapper;
 
-      template<typename T, typename std::enable_if<std::is_base_of<ObjectWrapper, T>::value>::type * = nullptr>
+      template <typename T, typename std::enable_if<std::is_base_of<ObjectWrapper, T>::value>::type * = nullptr>
       static void AddHookedEventWithCaller(
             const std::string &                                                 eventName,
             std::function<void(T caller, void * params, std::string eventName)> func,
@@ -73,7 +82,7 @@ inline std::
                                     HookedEvents::hooked_events;
 inline std::shared_ptr<GameWrapper> HookedEvents::gameWrapper;
 
-template<typename T, typename std::enable_if<std::is_base_of<ObjectWrapper, T>::value>::type *>
+template <typename T, typename std::enable_if<std::is_base_of<ObjectWrapper, T>::value>::type *>
 void HookedEvents::AddHookedEventWithCaller(
       const std::string &                                                 eventName,
       std::function<void(T caller, void * params, std::string eventName)> func,
@@ -91,7 +100,7 @@ void HookedEvents::AddHookedEventWithCaller(
                       return ((he->eventName == eventName) && (he->isPost == isPost));
                 })
           != end(hooked_events)) {
-            log::LOG("Hooked event (with caller) \"{}\" already exists. Cannot overwrite.", eventName);
+            log::log_debug("Hooked event (with caller) \"{}\" already exists. Cannot overwrite.", eventName);
             return;
       }
       // just because it might already exist before we manage it.
@@ -124,7 +133,7 @@ inline void HookedEvents::AddHookedEvent(
                       return ((he->eventName == eventName) && (he->isPost == isPost));
                 })
           != end(hooked_events)) {
-            log::LOG("Hooked event \"{}\" already exists. Cannot overwrite.", eventName);
+            log::log_debug("Hooked event \"{}\" already exists. Cannot overwrite.", eventName);
             return;
       }
       // just because it might exist before we manage it.
@@ -133,9 +142,7 @@ inline void HookedEvents::AddHookedEvent(
             isPost ? &GameWrapper::HookEventPost : &GameWrapper::HookEvent;
       (gameWrapper.get()->*hook)(eventName, func);
 
-      hooked_events.insert(std::shared_ptr<HookedEvent> {
-            new HookedEvent {eventName, isPost}
-      });
+      hooked_events.insert(std::make_shared<HookedEvent>(eventName, isPost));
 }
 
 inline void HookedEvents::RemoveHook(std::string key) {
@@ -147,12 +154,18 @@ inline void HookedEvents::RemoveHook(std::string key) {
       }
 }
 
+/**
+ *  \note I wanted to make this be able to search keys in the HookedEvents set with a regex string.
+ *        But I forgot that paltry amount of c++ regex I was doing for another thing... which reminds me
+ *        of forgetting chrono stuf... kind of ...
+ *
+ */
 inline void HookedEvents::RemoveHook(std::regex key) {
 }
 
 /**
  * @brief You shouldn't necessarily need to call this yourself, as all hooks unhook when the underlying structure gets
- * destroyed at the end of the program, but if you want to remove them all before then, explicitly, then call this.
+ * destroyed at the end of the program, but if you want to remove them all before then explicitly, then call this.
  */
 inline void HookedEvents::RemoveAllHooks() {
       hooked_events.clear();

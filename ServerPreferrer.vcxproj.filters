@@ -22,14 +22,20 @@
     <Filter Include="CMAP">
       <UniqueIdentifier>{4287bc7c-c03b-4df3-8034-9a10fab928d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="IMGUI_SUGAR">
+      <UniqueIdentifier>{578c573c-000f-4e19-bad8-a5bc315546d2}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="vs_property_pages\BakkesMod.props" />
+    <None Include="vcpkg.json" />
+    <None Include="vcpkg-configuration.json" />
+    <None Include="README.md" />
+    <None Include="update_version.ps1" />
+    <None Include=".gitattributes" />
+    <None Include=".gitignore" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(RootNamespace).cc">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="$(BakkesModPath)\bakkesmodsdk\include\bakkesmod\imgui\imgui.cpp">
       <Filter>IMGUI</Filter>
     </ClCompile>
@@ -63,18 +69,15 @@
     <ClCompile Include="Source.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ServerPreferrer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PersistentManagedCVarStorage.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="$(RootNamespace).h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="HookedEvents.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="bm_helper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="imgui_helper.h">
+    <ClInclude Include="ServerPreferrer.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="$(BakkesModPath)\bakkesmodsdk\include\bakkesmod\imgui\imconfig.h">
@@ -116,14 +119,35 @@
     <ClInclude Include="$(BakkesModPath)\bakkesmodsdk\include\bakkesmod\imgui\imstb_truetype.h">
       <Filter>IMGUI</Filter>
     </ClInclude>
-    <ClInclude Include="Logger.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CVarManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="cmap\include\cmap.hpp">
       <Filter>CMAP</Filter>
     </ClInclude>
+    <ClInclude Include="imgui_sugar\imgui_sugar.hpp">
+      <Filter>IMGUI_SUGAR</Filter>
+    </ClInclude>
+    <ClInclude Include="bm_helper.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CVarManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="HookedEvents.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui_helper.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Logger.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PersistentManagedCVarStorage.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="License.txt" />
   </ItemGroup>
 </Project>
