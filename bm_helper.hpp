@@ -397,6 +397,115 @@ const std::map<OnlinePlatform, std::string> onlineplatform_ids_str = {
       {    OnlinePlatform_MAX,     "OnlinePlatform_MAX"}
 };
 
+const std::map<int, std::string> MapsFNames = {
+      {     0,                  "Nothing"},
+      {  1316,             "Farm_Night_P"},
+      {  1781,            "CHN_Stadium_P"},
+      {  3251,        "throwbackhockey_p"},
+      {  3254,                  "music_p"},
+      {  3257,             "Labs_Basin_P"},
+      {  3260,          "Labs_Corridor_P"},
+      {  3263,           "Labs_Galleon_P"},
+      {  3269,        "CHN_Stadium_Day_P"},
+      {  3272,                     "bb_p"},
+      {  3755,       "Stadium_Race_Day_p"},
+      {  3788,      "Labs_Galleon_Mast_P"},
+      {  4094,         "Labs_Holyfield_P"},
+      {  4316,              "park_bman_p"},
+      {  4445,       "Labs_PillarGlass_P"},
+      {  4451,        "Labs_PillarHeat_P"},
+      {  4457,       "Labs_PillarWings_P"},
+      {  4463,             "Park_Snowy_P"},
+      {  5486,            "KO_Calavera_P"},
+      {  5492,              "KO_Carbon_P"},
+      {  5498,             "KO_Quadron_P"},
+      {  6611,            "FNI_Stadium_P"},
+      {  9082,            "Woods_Night_P"},
+      { 13707,          "UtopiaStadium_P"},
+      { 13708,     "UtopiaStadium_Dusk_P"},
+      { 13709,     "UtopiaStadium_Snow_P"},
+      { 13710,      "UtopiaStadium_Lux_P"},
+      { 13711,                "Stadium_P"},
+      { 13712,           "TrainStation_P"},
+      { 13713,            "EuroStadium_P"},
+      { 13714,                   "Park_P"},
+      { 13715,      "TrainStation_Dawn_P"},
+      { 13716,     "TrainStation_Night_P"},
+      { 13717,   "Haunted_TrainStation_P"},
+      { 13718,      "EuroStadium_Rainy_P"},
+      { 13719,             "Park_Night_P"},
+      { 13720,             "Park_Rainy_P"},
+      { 13721,          "stadium_Rainy_p"},
+      { 13722,              "Wasteland_P"},
+      { 13723,        "Wasteland_Night_P"},
+      { 13724,            "wasteland_s_p"},
+      { 13725,      "wasteland_Night_S_P"},
+      { 13726,               "NeoTokyo_P"},
+      { 13727,      "NeoTokyo_Standard_P"},
+      { 13728,             "Underwater_P"},
+      { 13729,                    "ARC_P"},
+      { 13730,           "arc_standard_p"},
+      { 13734,         "Stadium_Winter_P"},
+      { 13735,          "Stadium_Foggy_P"},
+      { 13736,      "EuroStadium_Night_P"},
+      { 13737,           "HoopsStadium_P"},
+      { 13738,            "Labs_Cosmic_P"},
+      { 13739,         "Labs_Cosmic_V4_P"},
+      { 13740,        "Labs_DoubleGoal_P"},
+      { 13741,     "Labs_DoubleGoal_V2_P"},
+      { 13742,         "Labs_Underpass_P"},
+      { 13743,            "Labs_Utopia_P"},
+      { 13744,     "Labs_CirclePillars_P"},
+      { 13745,           "Labs_Octagon_P"},
+      { 13746,        "Labs_Octagon_02_P"},
+      { 13747,            "ShatterShot_P"},
+      { 13748,                     "cs_p"},
+      { 13749,                 "cs_day_p"},
+      { 13750,            "stadium_day_p"},
+      { 13751,     "EuroStadium_Winter_P"},
+      { 13752,  "eurostadium_snownight_p"},
+      { 13753,                   "farm_p"},
+      { 13754,       "throwbackstadium_P"},
+      { 13755,                  "beach_P"},
+      { 13756,                  "cs_hw_p"},
+      { 13757,            "beach_night_p"},
+      { 13759,        "Farm_UpsideDown_P"},
+      { 13760,    "TrainStation_Spooky_P"},
+      { 13761,                 "outlaw_p"},
+      { 13762,               "ARC_Darc_P"},
+      { 13763,          "NeoTokyo_Toon_p"},
+      { 13764,                 "street_p"},
+      { 13765,            "hoopsStreet_p"},
+      { 13766,                "Farm_HW_P"},
+      { 13767,                 "swoosh_p"},
+      { 13768,           "Outlaw_Oasis_P"},
+      { 13769,                "FF_Dusk_P"},
+      { 13770,           "NeoTokyo_Hax_P"},
+      { 13771,       "EuroStadium_Dusk_P"},
+      { 13772,          "Wasteland_GRS_P"},
+      { 13773,               "Farm_GRS_P"},
+      { 13774,         "Underwater_GRS_P"},
+      { 13775,        "Beach_Night_GRS_P"},
+      { 13776,                  "woods_p"},
+      { 22681,              "menu_main_p"},
+      { 77499,      "Labs_Underpass_v0_p"},
+      { 78310,  "MapThumb_NeoTokyo_Hax_P"},
+      { 92722,           "BG_Woods_Day_P"},
+      { 92723,         "BG_Woods_Night_P"},
+      { 96033,        "HoopsStreet_Art_P"},
+      { 96124, "NeoTokyo_Hax_Signs_Off_P"},
+      { 96125,     "NeoTokyo_Hax_Signs_P"},
+      { 96137,        "Outlaw_Oasis_FX_P"},
+      {100721,    "Wasteland_Art_Night_P"},
+      {100722,  "Wasteland_Art_Night_S_P"},
+      {100723,          "Wasteland_Art_P"},
+      {100724,        "Wasteland_Art_S_P"},
+      {100725,      "Wasteland_GRS_Art_P"},
+      {100732,    "Wasteland_Night_VFX_P"},
+      {101944,           "Woods_Forest_P"},
+      {114201,      "UEDPCBG_Woods_Day_P"}
+};
+
 namespace details {
       // PACK THESE STRUCTS INTO ALIGNMENTS OF 4 BYTES
       // I DONT KNOW WHY
@@ -443,9 +552,8 @@ namespace details {
       };
 
       // FPointer
-      // (0x0000 - 0x0004)
       struct FPointer {
-            uintptr_t Dummy;  // 0x0000 (0x04)
+            uintptr_t Dummy;
       };
 
       // FString
@@ -577,8 +685,8 @@ namespace details {
 
       struct FName {
             // "An index and a number into a hardcoded table of strings"... or whatever
-            uint32_t index;
-            uint32_t number;
+            int32_t FNameEntryId;
+            int32_t InstanceNumber;
       };
 
       template <typename TArray> class TIterator {
@@ -1057,6 +1165,17 @@ template <> struct std::formatter<bm_helper::details::FString> {
 
 #define PRINT_STRUCTURE(name) std::format("{}: {}", #name, name)
 
+template <> struct std::formatter<bm_helper::details::FName> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FName & obj, std::format_context & ctx) const {
+            auto FNameEntryId   = obj.FNameEntryId;
+            auto InstanceNumber = obj.InstanceNumber;
+
+            return std::format_to(ctx.out(), "{{{}, {}}}", FOR_EACH(PRINT_STRUCTURE, FNameEntryId, InstanceNumber));
+      }
+};
+
 template <> struct std::formatter<bm_helper::details::FJoinMatchSettings> {
       constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
 
@@ -1166,24 +1285,26 @@ template <> struct std::formatter<bm_helper::details::FCustomMatchSettings> {
       constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
 
       auto format(const bm_helper::details::FCustomMatchSettings & obj, std::format_context & ctx) const {
-            auto GameTags       = obj.GameTags;           // FString
-            auto MapName        = "<check source code>";  // obj.MapName;          // FName
-            auto GameMode       = obj.GameMode;           // uint8_t
-            auto MaxPlayerCount = obj.MaxPlayerCount;     // int32_t
-            auto ServerName     = obj.ServerName;         // FString
-            auto Password       = obj.Password;           // FString
-            auto bPublic        = obj.bPublic;            // uint32_t
-            auto TeamSettings0  = obj.TeamSettings[0];    // FCustomMatchTeamSettings
-            auto TeamSettings1  = obj.TeamSettings[1];    // FCustomMatchTeamSettings
-            auto bClubServer    = obj.bClubServer;        // uint32_t
+            auto GameTags       = obj.GameTags;  // FString
+            auto MapName        = obj.MapName;   // FName
+            auto MapNameStr     = bm_helper::MapsFNames.at(obj.MapName.FNameEntryId);
+            auto GameMode       = obj.GameMode;         // uint8_t
+            auto MaxPlayerCount = obj.MaxPlayerCount;   // int32_t
+            auto ServerName     = obj.ServerName;       // FString
+            auto Password       = obj.Password;         // FString
+            auto bPublic        = obj.bPublic;          // uint32_t
+            auto TeamSettings0  = obj.TeamSettings[0];  // FCustomMatchTeamSettings
+            auto TeamSettings1  = obj.TeamSettings[1];  // FCustomMatchTeamSettings
+            auto bClubServer    = obj.bClubServer;      // uint32_t
 
             return std::format_to(
                   ctx.out(),
-                  "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
+                  "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
                   FOR_EACH(
                         PRINT_STRUCTURE,
                         GameTags,
                         MapName,
+                        MapNameStr,
                         GameMode,
                         MaxPlayerCount,
                         ServerName,
