@@ -1163,7 +1163,7 @@ template <> struct std::formatter<bm_helper::details::FString> {
 #define FOR_EACH_HELPER(macro, a1, ...) macro(a1) __VA_OPT__(, ) __VA_OPT__(FOR_EACH_AGAIN PARENS(macro, __VA_ARGS__))
 #define FOR_EACH_AGAIN()                FOR_EACH_HELPER
 
-#define PRINT_STRUCTURE(name) std::format("{}: {}", #name, name)
+#define PRINT_NAMEANDVAR(name) std::format("{}: {}", #name, name)
 
 template <> struct std::formatter<bm_helper::details::FName> {
       constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
@@ -1172,7 +1172,7 @@ template <> struct std::formatter<bm_helper::details::FName> {
             auto FNameEntryId   = obj.FNameEntryId;
             auto InstanceNumber = obj.InstanceNumber;
 
-            return std::format_to(ctx.out(), "{{{}, {}}}", FOR_EACH(PRINT_STRUCTURE, FNameEntryId, InstanceNumber));
+            return std::format_to(ctx.out(), "{{{}, {}}}", FOR_EACH(PRINT_NAMEANDVAR, FNameEntryId, InstanceNumber));
       }
 };
 
@@ -1190,7 +1190,14 @@ template <> struct std::formatter<bm_helper::details::FJoinMatchSettings> {
             return std::format_to(
                   ctx.out(),
                   "FJoinMatchSettings{{{}, {}, {}, {}, {}, {}}}",
-                  FOR_EACH(PRINT_STRUCTURE, bFriendJoin, bMigration, RankedReconnect, MatchType, PlaylistId, Password));
+                  FOR_EACH(
+                        PRINT_NAMEANDVAR,
+                        bFriendJoin,
+                        bMigration,
+                        RankedReconnect,
+                        MatchType,
+                        PlaylistId,
+                        Password));
       }
 };
 
@@ -1210,7 +1217,7 @@ template <> struct std::formatter<bm_helper::details::FServerReservationData> {
                   ctx.out(),
                   "FServerReservationData{{{}, {}, {}, {}, {}, {}, {}}}",
                   FOR_EACH(
-                        PRINT_STRUCTURE,
+                        PRINT_NAMEANDVAR,
                         Playlist,
                         DSRToken,
                         JoinName,
@@ -1233,7 +1240,7 @@ template <> struct std::formatter<bm_helper::details::FActiveServerData> {
             return std::format_to(
                   ctx.out(),
                   "{{{}, {}, {}, {}}}",
-                  FOR_EACH(PRINT_STRUCTURE, Reservation, GameURL, PingURL, JoinCredentials));
+                  FOR_EACH(PRINT_NAMEANDVAR, Reservation, GameURL, PingURL, JoinCredentials));
       }
 };
 
@@ -1249,7 +1256,7 @@ template <> struct std::formatter<bm_helper::details::UOnlineGameJoinGame_X_exec
             return std::format_to(
                   ctx.out(),
                   "{{{}, {}, {}}}",
-                  FOR_EACH(PRINT_STRUCTURE, JoinSettings, Reservation, ReturnValue));
+                  FOR_EACH(PRINT_NAMEANDVAR, JoinSettings, Reservation, ReturnValue));
       }
 };
 
@@ -1265,7 +1272,7 @@ template <> struct std::formatter<bm_helper::details::FClubColorSet> {
             return std::format_to(
                   ctx.out(),
                   "{{{}, {}, {}, {}}}",
-                  FOR_EACH(PRINT_STRUCTURE, TeamColorID, CustomColorID, bTeamColorSet, bCustomColorSet));
+                  FOR_EACH(PRINT_NAMEANDVAR, TeamColorID, CustomColorID, bTeamColorSet, bCustomColorSet));
       }
 };
 
@@ -1277,7 +1284,7 @@ template <> struct std::formatter<bm_helper::details::FCustomMatchTeamSettings> 
             auto Colors    = obj.Colors;
             auto GameScore = obj.GameScore;
 
-            return std::format_to(ctx.out(), "{{{}, {}, {}}}", FOR_EACH(PRINT_STRUCTURE, Name, Colors, GameScore));
+            return std::format_to(ctx.out(), "{{{}, {}, {}}}", FOR_EACH(PRINT_NAMEANDVAR, Name, Colors, GameScore));
       }
 };
 
@@ -1301,7 +1308,7 @@ template <> struct std::formatter<bm_helper::details::FCustomMatchSettings> {
                   ctx.out(),
                   "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
                   FOR_EACH(
-                        PRINT_STRUCTURE,
+                        PRINT_NAMEANDVAR,
                         GameTags,
                         MapName,
                         MapNameStr,
@@ -1353,7 +1360,7 @@ template <> struct std::formatter<bm_helper::details::UOnlineGameJoinGame_X> {
                   ctx.out(),
                   "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
                   FOR_EACH(
-                        PRINT_STRUCTURE,
+                        PRINT_NAMEANDVAR,
                         JoinCountdownTime,
                         FailCommand,
                         LoadingScreenCommand,

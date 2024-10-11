@@ -136,13 +136,45 @@ void ServerPreferrer::init_hooked_events() {
 
       HookedEvents::AddHookedEvent(
             "Function TAGame.GFxData_Matchmaking_TA.StartMatchmaking",
-            [this](std::string eventName) { log::log_debug("MATCHMAKING HAS STARTED! NOW CHECKING!"); });
+            [this](std::string eventName) {
+                  log::log_debug("MATCHMAKING HAS STARTED! NOW CHECKING!");
+                  HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
+                        "Function ProjectX.OnlineGameJoinGame_X.EventActiveServerChanged",
+                        [this](ActorWrapper caller, void * params, std::string eventName) {
+                              log::log_debug("CALLING {}...POST", eventName);
+
+                              using OGJG = bm_helper::details::UOnlineGameJoinGame_X;
+                              OGJG * p   = reinterpret_cast<OGJG *>(caller.memory_address);
+
+                              log::log_debug("THE GOD DAMN SERVER INFORMATION WAS CAPTURED!");
+                              log::log_debug("{}", *p);
+
+                              if (p->ActiveServer.PingURL.length() != 0) {  // WE HAVE THE INFORMATION!
+                                    // check it
+                                    using namespace std::chrono;
+                                    server_info info {
+                                          .tp =
+                                                zoned_seconds {
+                                                               current_zone(),
+                                                               time_point_cast<seconds>(system_clock::now())},
+                                          .server_name = p->ActiveServer.Reservation.ServerName.ToString(),
+                                          .playlist_id = std::to_string(p->ActiveServer.Reservation.Playlist),
+                                          .region      = p->ActiveServer.Reservation.Region.ToString(),
+                                          .ping_url    = p->ActiveServer.PingURL.ToString(),
+                                          .game_url    = p->ActiveServer.GameURL.ToString()
+                                    };
+                                    // server_entries.emplace_back(info);
+                                    check_server_connection(info);
+                              }
+                        });
+            });
 
       HookedEvents::AddHookedEvent(
             "Function ProjectX.OnlineGameMatchmakingBase_X.OnSearchComplete",
             [this](std::string eventName) {
                   // stop operations
                   log::log_debug("DONE CHECKING, LOL!");
+                  HookedEvents::RemoveHook("Function ProjectX.OnlineGameJoinGame_X.EventActiveServerChanged");
             });
 
       HookedEvents::AddHookedEvent("Function Engine.GameInfo.PreExit", [this](std::string eventName) {
@@ -150,93 +182,19 @@ void ServerPreferrer::init_hooked_events() {
             onUnload();
       });
 
-      HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
-            "Function ProjectX.OnlineGameJoinGame_X.EventActiveServerChanged",
-            [this](ActorWrapper caller, void * params, std::string eventName) {
-                  log::log_debug("CALLING {}...POST", eventName);
-
-                  using OGJG = bm_helper::details::UOnlineGameJoinGame_X;
-                  OGJG * p   = reinterpret_cast<OGJG *>(caller.memory_address);
-
-                  log::log_debug("THE GOD DAMN SERVER INFORMATION WAS CAPTURED!");
-                  log::log_debug("{}", *p);
-            });
-
       log::log_debug("hooked");
 }
 
 void ServerPreferrer::init_data() {
 }
 
-/// <summary>
-/// Check the Launch.log file for a certain match
-///
-/// Adds to the server entries if there's a match.
-/// </summary>
-/// <param name="start_read">Where to start reading in the file.</param>
-/// <returns>True if match is met. False if there's no match.</returns>
-bool ServerPreferrer::check_launch_log(std::streamoff start_read) {
-      gameWrapper->ExecuteUnrealCommand("flushlog");
-      std::string line;
-
-      std::regex server_info_match;
-      try {
-            server_info_match = std::regex {
-                  ".*ServerName=\"([a-zA-Z0-9\\-]+)\""
-                  ".*Playlist=([0-9]+)"
-                  ".*Region=\"([a-zA-Z0-9\\-]+)\""
-                  ".*PingURL=\"([0-9.:\\-]+)\""
-                  ".*GameURL=\"([0-9.:\\-]+)\""
-                  ".*",
-                  std::regex::extended | std::regex::icase};
-      } catch (const std::exception & e) {
-            log::log_error("REGEX ERROR? HELP! {}", e.what());
-            return false;
-      }
-
-      while (false) {
-            std::smatch re_match;
-            if (std::regex_match(line, re_match, server_info_match)) {
-                  if (re_match.size() == 6) {
-                        using namespace std::chrono;
-
-                        // A MATCH to the needed line!
-                        // 6 because the first "match" is basically the entire line.
-                        std::ssub_match server_name {re_match[1]};
-                        std::ssub_match server_playlist {re_match[2]};
-                        std::ssub_match server_region {re_match[3]};
-                        std::ssub_match server_pingurl {re_match[4]};
-                        std::ssub_match server_gameurl {re_match[5]};
-
-                        server_entries.emplace_back(server_info {
-                              .tp = zoned_seconds {current_zone(), time_point_cast<seconds>(system_clock::now())},
-                              .server_name = server_name.str(),
-                              .playlist_id = server_playlist.str(),
-                              .region      = server_region.str(),
-                              .ping_url    = server_pingurl.str(),
-                              .game_url    = server_gameurl.str()
-                        });
-                        const server_info & sv = server_entries.back();
-                        log::log_debug(
-                              "TIME: {}, SERVER_NAME: {}, PLAYLIST_ID: {}, REGION: "
-                              "{}, "
-                              "PING_URL: {}, GAME_URL: "
-                              "{}",
-                              std::vformat(DATETIME_FORMAT_STR, std::make_format_args(sv.tp)),
-                              sv.server_name,
-                              sv.playlist_id,
-                              sv.region,
-                              sv.ping_url,
-                              sv.game_url);
-                        return true;
-                  }
-            }
-      }
-      last_map_command.clear();
-      return false;
-}
-
-std::expected<bool, CONNECTION_STATUS> ServerPreferrer::is_good_ping_icmp(std::string pingaddr, int times) {
+/**
+ * @brief
+ * @param pingaddr
+ * @param times
+ * @return
+ */
+ServerPreferrer::test_t ServerPreferrer::is_good_ping_icmp(std::string pingaddr, int times) {
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
 
       // do the pings
@@ -348,7 +306,8 @@ t1).count());
  * \param playid The ID of the game's playlist
  *
  */
-std::expected<bool, CONNECTION_STATUS> ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
+ServerPreferrer::test_t ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
+      log::log_debug("TESTING THAT GAME MODE!");
       // big assumption this playlist id is an actual playlist id
 
       // if (std::ranges::contains(
@@ -371,6 +330,7 @@ std::expected<bool, CONNECTION_STATUS> ServerPreferrer::is_valid_game_mode(Playl
 }
 
 static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr, int times) {
+      log::log_debug("TESTING THAT PING!!!!");
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
       HANDLE        hIcmpFile;
       unsigned long ip_addr  = INADDR_NONE;
@@ -412,133 +372,117 @@ static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr
       }
 
       free(ReplyBuffer);
+
+      log::log_debug("DONE TESTING THAT PING!!!!");
       return (avg / i);
 }
 
-/// <summary>
-/// fucking separate this...
-/// </summary>
-/// <param name="server"></param>
-/// <param name="threshold"></param>
-// void ServerPreferrer::check_server_connection(server_info server) {
-//       // throw a thread outside of the game's thread so it doesn't lag the game.
-//       std::string pingaddr = server.ping_url;
-//       pingaddr             = pingaddr.substr(0, pingaddr.find(":"));
-//
-//       /*
-//        * NEED TO THINK ABOUT THIS SECTION LATER UGGHHHHHHHHHHH
-//        */
-//
-//       std::vector<std::future<std::expected<bool, CONNECTION_STATUS>>> checks;
-//
-//       if (check_server_ping) {
-//             checks.emplace_back(std::async(std::launch::async, time_icmp_ping,
-//             pingaddr, 5));
-//       }
-//
-//       checks.emplace_back(std::async(
-//             std::launch::async,
-//             &ServerPreferrer::is_valid_game_mode,
-//             this,
-//             static_cast<PlaylistId>(std::stoi(server.playlist_id))));
-//
-//       // this is purely for checking for success
-//       HookedEvents::AddHookedEvent(
-//             "Function ProjectX.GFxEngine_X.Tick",
-//             [&](...) {
-//                   for (auto & check : checks) {
-//                         std::future_status fs;
-//                         using namespace std::chrono_literals;
-//                         fs = check.wait_for(
-//                               // std::chrono::duration<std::chrono::seconds::rep,
-//                               std::chrono::seconds::period>
-//                               // {0});
-//                               0s);
-//                         if (fs == std::future_status::ready) {
-//                               // KEEP GOING !
-//                               if (!check.get().has_value()) {
-//                                     // ERROR OCCURRED!
-//                                     //  QUIT!
-//                               }
-//                         }
-//                   }
-//
-//                   log::LOG(
-//                         "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY "
-//                         "VARIABLES?: "
-//                         "{}",
-//                         false,
-//                         ping_threshold,
-//                         should_requeue_after_cancel);
-//
-//                   int ping = 0;  // OH BOY ~fix this~
-//                   // report
-//                   if (ping < 0) {
-//                         // an error occurred
-//                         log::LOG(
-//                               "ERROR WHILE RUNNING PING TEST: {}",
-//                               ping == -1   ? "INET_PTON FAILURE"
-//                               : ping == -2 ? "IcmpCreateFile INVALID_HANDLE_VALUE
-//                               FAILURE" : ping == -3 ? "UNABLE TO CREATE MEMORY FOR
-//                               REPLY BUFFER" : ping == -4 ? "ICMP PING CALL FAILURE"
-//                                            : "UNKNOWN");
-//                   } else {
-//                         // success?
-//                         auto str = std::format(
-//                               "AVERAGE PING {0:c} THRESHOLD, {1} "
-//                               "{0:c} {2}",
-//                               ping > ping_threshold   ? '>'
-//                               : ping < ping_threshold ? '<'
-//                                                       : '=',
-//                               ping,
-//                               ping_threshold);
-//
-//                         log::LOG(str);
-//                         gameWrapper->LogToChatbox(str, "SP");
-//                   }
-//
-//                   // finally, if an error occurred or ping above the threshold
-//                   if (ping < 0 || ping > ping_threshold) {
-//                         // TURN OFF THE GAME'S FLASHING TASKBAR ICON!
-//                         // because the player didn't join a game, so don't flash the
-//                         taskbar
-//                         // like they did
-//                         FLASHWINFO stop_flashing {
-//                               .cbSize    = sizeof(FLASHWINFO),
-//                               .hwnd      = rl_hwnd,
-//                               .dwFlags   = FLASHW_STOP,
-//                               .uCount    = 0,
-//                               .dwTimeout = 0};
-//                         FlashWindowEx(&stop_flashing);
-//
-//                         gameWrapper->Execute([this](GameWrapper * gw) {
-//                         cvarManager->executeCommand("queue_cancel");
-//                         });
-//
-//                         if (should_requeue_after_cancel) {
-//                               gameWrapper->Execute([this](GameWrapper * gw) {
-//                               cvarManager->executeCommand("queue");
-//                               });
-//                         }
-//                   }
-//
-//                   if (should_focus_on_success) {
-//                         // idk if I need to check for states to determine what nCmdShow
-//                         should be...
-//                         // if (IsIconic(rl_hwnd)) {
-//                         //      // means the rocket league window is minimized
-//                         //      ShowWindowAsync(rl_hwnd, SW_RESTORE);
-//                         //}
-//                         ShowWindowAsync(rl_hwnd, SW_RESTORE);
-//                   }
-//
-//                   // remove the hook that checks for the ping update.
-//                   HookedEvents::RemoveHook("Function ProjectX.GFxEngine_X.Tick");
-//             },
-//             true);
-//       /*** end check for ping ***/
-//       // write_out_server_attempt();
-// }
+/**
+ * @brief fucking separate this...
+ * @param server
+ */
+void ServerPreferrer::check_server_connection(server_info server) {
+      // remove all previous checks
+      checks.clear();
+
+      // throw a thread outside of the game's thread so it doesn't lag the game.
+      std::string pingaddr = server.ping_url;
+      pingaddr             = pingaddr.substr(0, pingaddr.find(":"));
+
+      /*
+       * NEED TO THINK ABOUT THIS SECTION LATER UGGHHHHHHHHHHH
+       */
+
+      if (check_server_ping) {
+            checks.emplace_back(std::async(std::launch::async, time_icmp_ping, pingaddr, 5));
+      }
+
+      // checks.emplace_back(std::async(
+      //       std::launch::async,
+      //       &ServerPreferrer::is_valid_game_mode,
+      //       this,
+      //       static_cast<PlaylistId>(std::stoi(server.playlist_id))));
+
+      // this is purely for checking for success
+      log::log_debug("IN CHECK_SERVER_CONNECTION; {}", PRINT_NAMEANDVAR(checks.size()));
+      HookedEvents::AddHookedEvent("Function ProjectX.GFxEngine_X.Tick", [this](...) {
+            log::log_debug("IN TICK; {}", PRINT_NAMEANDVAR(checks.size()));
+            for (auto check = checks.begin(); auto & elem : checks) {
+                  using namespace std::chrono_literals;
+                  std::future_status fs = elem.wait_for(0s);
+                  if (fs == std::future_status::ready) {
+                        // HANDLE IT
+                        checks.clear();
+                        break;
+                  }
+            }
+
+            int ping = checks[0].get().value_or(0);  // .get() MAKES TASK INVALID
+
+            log::log_debug(
+                  "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY VARIABLES?: {}",
+                  ping,
+                  ping_threshold,
+                  should_requeue_after_cancel);
+
+            // report
+            if (ping < 0) {
+                  // an error occurred
+                  log::log_error(
+                        "ERROR WHILE RUNNING PING TEST: {}",
+                        ping == -1   ? "INET_PTON FAILURE"
+                        : ping == -2 ? "IcmpCreateFile INVALID_HANDLE_VALUE FAILURE"
+                        : ping == -3 ? " UNABLE TO CREATE MEMORY FOR REPLY BUFFER"
+                        : ping == -4 ? " ICMP PING CALL FAILURE "
+                                     : "UNKNOWN");
+            } else {
+                  // success?
+                  auto str = std::format(
+                        "AVERAGE PING {0:c} THRESHOLD, {1} "
+                        "{0:c} {2}",
+                        ping > ping_threshold   ? '>'
+                        : ping < ping_threshold ? '<'
+                                                : '=',
+                        ping,
+                        ping_threshold);
+
+                  log::log_error(str);
+                  gameWrapper->LogToChatbox(str, "SP");
+            }
+
+            // finally, if an error occurred or ping above the threshold
+            if (ping < 0 || ping > ping_threshold) {
+                  // TURN OFF THE GAME'S FLASHING TASKBAR ICON!
+                  // because the player didn't join a game, so don't flash the taskbar
+                  // like they did
+                  FLASHWINFO stop_flashing {
+                        .cbSize    = sizeof(FLASHWINFO),
+                        .hwnd      = rl_hwnd,
+                        .dwFlags   = FLASHW_STOP,
+                        .uCount    = 0,
+                        .dwTimeout = 0};
+                  FlashWindowEx(&stop_flashing);
+
+                  gameWrapper->Execute([this](GameWrapper * gw) { cvarManager->executeCommand("queue_cancel"); });
+
+                  if (should_requeue_after_cancel) {
+                        gameWrapper->Execute([this](GameWrapper * gw) { cvarManager->executeCommand("queue"); });
+                  }
+            }
+
+            if (should_focus_on_success) {
+                  // idk if I need to check for states to determine what nCmdShow should be...
+                  // if (IsIconic(rl_hwnd)) {
+                  //      // means the rocket league window is minimized
+                  //      ShowWindowAsync(rl_hwnd, SW_RESTORE);
+                  //}
+                  ShowWindowAsync(rl_hwnd, SW_RESTORE);
+            }
+            HookedEvents::RemoveHook("Function ProjectX.GFxEngine_X.Tick");
+      });
+      /*** end check for ping ***/
+      // write_out_server_attempt();
+}
 
 /// <summary>
 /// WHY? BECAUSE .front() ON AN EMPTY DEQUE IS UB
@@ -549,11 +493,7 @@ static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr
 /// THIS IS SOLELY TO ADDRESS WHEN THE BANK IS EMPTY
 /// </summary>
 ServerPreferrer::server_info ServerPreferrer::get_first_server_entry() {
-      if (server_entries.empty()) {
-            return server_info {};
-      }
-
-      return server_entries.front();
+      return server_entries.empty() ? server_info {} : server_entries.front();
 }
 
 /// <summary>
@@ -565,11 +505,7 @@ ServerPreferrer::server_info ServerPreferrer::get_first_server_entry() {
 /// THIS IS SOLELY TO ADDRESS WHEN THE BANK IS EMPTY
 /// </summary>
 ServerPreferrer::server_info ServerPreferrer::get_last_server_entry() {
-      if (server_entries.empty()) {
-            return server_info {};
-      }
-
-      return server_entries.back();
+      return server_entries.empty() ? server_info {} : server_entries.back();
 }
 
 /// <summary>

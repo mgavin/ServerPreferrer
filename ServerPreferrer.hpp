@@ -4,6 +4,7 @@
 #include <chrono>
 #include <deque>
 #include <expected>
+#include <future>
 #include <memory>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -81,15 +82,28 @@ private:
             DWORD pid  = GetCurrentProcessId();
             HWND  hWnd = FindWindow(NULL, NULL);
             while (hWnd) {
+                  // cycle through all windows to find one that has "Rocket" in the name
+                  // then return its handle
                   DWORD procID;
                   GetWindowThreadProcessId(hWnd, &procID);
                   if (procID == pid) {
+#ifdef _MBCS
+                        char str[128] = {0};
+                        GetWindowText(hWnd, str, 128);
+                        if (strstr(str, "Rocket") != NULL) {
+                              return hWnd;
+                        }
+#else
+#ifdef _UNICODE
                         wchar_t str[128] = {0};
                         GetWindowText(hWnd, str, 128);
                         if (wcsstr(str, L"Rocket") != NULL) {
                               return hWnd;
                         }
+#endif
+#endif
                   };
+                  // get next window
                   hWnd = GetWindow(hWnd, GW_HWNDNEXT);
             }
             return hWnd;
@@ -107,7 +121,8 @@ private:
             std::string                ping_url;
             std::string                game_url;
       };
-      std::deque<server_info> server_entries;
+      std::deque<server_info>                                         server_entries;
+      std::vector<std::future<std::expected<int, CONNECTION_STATUS>>> checks;
 
       // ping data
       int ping_threshold = 0;
@@ -135,12 +150,10 @@ private:
       void enable_plugin();
       void disable_plugin();
 
-      bool check_launch_log(std::streamoff start_read);
-
-      // void check_server_connection(server_info server);
+      void check_server_connection(server_info server);
 
       // tests
-      using test_t = std::expected<bool, CONNECTION_STATUS>;
+      using test_t = std::expected<int, CONNECTION_STATUS>;
       test_t is_valid_game_mode(PlaylistId playid);
       test_t is_good_ping_icmp(std::string pingaddr, int times);
 
@@ -151,17 +164,6 @@ private:
       // time fns
       std::string                get_current_datetime_str();
       std::chrono::zoned_seconds get_timepoint_from_str(std::string);
-
-      template <
-            typename ParamType,
-            typename CallerWrapper,
-            typename std::enable_if_t<std::is_base_of_v<ObjectWrapper, CallerWrapper>> * = nullptr>
-      inline void capture_console_fn(CallerWrapper cw, void * params, std::string eventName);
-
-      template <
-            typename CallerWrapper,
-            typename std::enable_if_t<std::is_base_of_v<ObjectWrapper, CallerWrapper>> * = nullptr>
-      inline void capture_logging_fn(CallerWrapper cw, void * params, std::string eventName);
 
 public:
       // honestly, for the sake of inheritance,
