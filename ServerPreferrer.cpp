@@ -287,13 +287,13 @@ void ServerPreferrer::init_hooked_events() {
       HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
             "Function ProjectX.OnlineGameJoinGame_X.SetActiveServerData",
             [this](ActorWrapper caller, void * params, std::string eventName) {
-                  using namespace std::chrono_literals;
                   using bm_helper::details::UOnlineGameJoinGame_X;
 
-                  std::this_thread::sleep_for(100ms);
                   log::log_debug("CALLING {}...", eventName);
+
                   bm_helper::details::FActiveServerData * p =
                         reinterpret_cast<bm_helper::details::FActiveServerData *>(params);
+
                   log::log_debug("PARAM'S LOCATION: {:X}", reinterpret_cast<uintptr_t>(params));
                   log::log_debug("CALLER'S LOCATION: {:X}", caller.memory_address);
 
@@ -302,6 +302,38 @@ void ServerPreferrer::init_hooked_events() {
                         return;
                   }
 
+                  int             i   = 0;
+                  int             end = 0;
+                  std::string     outstr {};
+                  unsigned char * bytes = nullptr;
+                  /* FUCK IT!!!!!!!!! */
+                  struct test {
+                        uint32_t ldword;
+                        uint32_t rdword;
+                  };
+                  bytes = reinterpret_cast<unsigned char *>(params);
+                  i     = -0x200;
+                  end   = 0x200;
+                  for (; i <= end; i += 8) {
+                        test * t = reinterpret_cast<test *>(&bytes[i]);
+                        log::log_debug(
+                              "CHECKING {} AND {} AT {:X}",
+                              t->ldword,
+                              t->rdword,
+                              reinterpret_cast<uintptr_t>(&bytes[i - 8]));
+                        if (t->ldword > 0 && t->ldword < 512 && t->ldword == t->rdword) {
+                              using bm_helper::details::FString;
+                              FString * fs = reinterpret_cast<FString *>(&bytes[i - 8]);
+                              log::log_debug(
+                                    "FOUND FSTRING AT {:X}: {}",
+                                    reinterpret_cast<uintptr_t>(&bytes[i - 8]),
+                                    *fs);
+                        }
+                  }
+
+                  /* FUCK IT!!!!!!!!!! */
+
+                  return;
                   UOnlineGameJoinGame_X * q = reinterpret_cast<UOnlineGameJoinGame_X *>(caller.memory_address);
 
                   if (q == nullptr) {
@@ -309,13 +341,9 @@ void ServerPreferrer::init_hooked_events() {
                         return;
                   }
 
-                  int             i   = 0;
-                  int             end = 0;
-                  std::string     outstr {};
-                  unsigned char * bytes = nullptr;
-                  bytes                 = reinterpret_cast<unsigned char *>(p);
-                  i                     = static_cast<int>(-0x100) + 1;
-                  end                   = 0x100;
+                  bytes = reinterpret_cast<unsigned char *>(p);
+                  i     = static_cast<int>(-0x100) + 1;
+                  end   = 0x100;
                   for (; i <= end; ++i) {
                         outstr += std::format("{:02X} ", bytes[i - 1]);
                         if (i % 8 == 0) {
@@ -463,74 +491,194 @@ void ServerPreferrer::init_hooked_events() {
                         p->GameURL.length());
             });
 
-      HookedEvents::AddHookedEventWithCaller<PlayerControllerWrapper>(
-            "Function ProjectX.OnlineGameJoinGame_X.StartJoin",
-            [this](PlayerControllerWrapper unused, void * params, std::string eventName) {
+      HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
+            "Function ProjectX.OnlineGameJoinGame_X.SetActiveServerData",
+            [this](ActorWrapper caller, void * params, std::string eventName) {
+                  using bm_helper::details::UOnlineGameJoinGame_X;
+
                   log::log_debug("CALLING {}...POST", eventName);
 
-                  using bm_helper::details::FString;
-                  using bm_helper::details::TArray;
+                  bm_helper::details::FActiveServerData * p =
+                        reinterpret_cast<bm_helper::details::FActiveServerData *>(params);
 
-                  struct ARGH {
-                        FString         a;
-                        int32_t         playlist;
-                        FString         b;
-                        FString         c;
-                        FString         d;
-                        uint8_t         padding[0x38];
-                        TArray<FString> e;
-                        // struct FServerReservationData {
-                        //       FString ServerName;     // 0x0000 (0x0010)
-                        //       [0x0000000000400000] (CPF_NeedCtorLink) int32_t Playlist;
-                        //       // 0x0010 (0x0004) [0x0000000000000000] FString Region;
-                        //       // 0x0018 (0x0010) [0x0000000000400000]
-                        //       (CPF_NeedCtorLink) FString ReservationID;  // 0x0028
-                        //       (0x0010) [0x0000000000400000] (CPF_NeedCtorLink) FString
-                        //       DSRToken;       // 0x0038 (0x0010) [0x0000000000400000]
-                        //       (CPF_NeedCtorLink)
-                        //       // UNetworkEncryptionKey * Keys;           // 0x0048
-                        //       (0x0008) [0x0000000000000000] uint8_t padding[0x38];
-                        //       FString JoinName;  // 0x0050 (0x0010)
-                        //       [0x0000000000400000] (CPF_NeedCtorLink) uint8_t
-                        //       pad2[0x8]; FString JoinPassword;  // 0x0060 (0x0010)
-                        //       [0x0000000000400000] (CPF_NeedCtorLink)
-                        // } RESERVATION;
+                  log::log_debug("PARAM'S LOCATION: {:X}", reinterpret_cast<uintptr_t>(params));
 
-                        // struct FJoinMatchSettings {
-                        //       uint8_t MatchType;  // 0x0000 (0x0001)
-                        //       [0x0000000000000000] FString one, two, three;
-                        //       // int32_t       PlaylistId;            // 0x0004
-                        //       (0x0004) [0x0000000000000000]
-                        //       // uint32_t      bFriendJoin      : 1;  // 0x0008
-                        //       (0x0004) [0x0000000000000000]
-                        //       // [0x00000001] uint32_t      bMigration       : 1;  //
-                        //       0x0008 (0x0004)
-                        //       // [0x0000000000000000] [0x00000002] uint32_t
-                        //       bRankedReconnect : 1;  // 0x0008
-                        //       // (0x0004) [0x0000000000000000] [0x00000004] class
-                        //       FString Password;  // 0x0010 (0x0010)
-                        //       // [0x0000000000400000] (CPF_NeedCtorLink)
-                        // } JOINSETTINGS;        // 0x0070 (0x0020) [0x0000000000400090]
-                        //                        // (CPF_OptionalParm | CPF_Parm |
-                        //                        CPF_NeedCtorLink)
-                        // bool ReturnValue : 1;  // 0x0090 (0x0004) [0x0000000000000580]
-                        // [0x00000001] (CPF_Parm |
-                        //                        // CPF_OutParm
-                        //                        // // | CPF_ReturnParm)
-                        // struct FActiveServerData {
-                        //       FServerReservationData
-                        //               Reservation;      // 0x0000 (0x0070)
-                        //               [0x0000000000400000] (CPF_NeedCtorLink)
-                        //       FString PingURL;          // 0x0070 (0x0010)
-                        //       [0x0000000000400000] (CPF_NeedCtorLink) FString GameURL;
-                        //       // 0x0080 (0x0010) [0x0000000000400000]
-                        //       (CPF_NeedCtorLink) FString JoinCredentials;  // 0x0090
-                        //       (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-                        // } NEWACTIVESERVER;              // 0x0098 (0x00A0)
-                        // [0x0000000000400000] (CPF_NeedCtorLink)
-                  };
+                  if (p == nullptr) {
+                        log::log_error("p WAS NULLPTR!!!!");
+                        return;
+                  }
 
-                  ARGH * p = reinterpret_cast<ARGH *>(params);
+                  int             i   = 0;
+                  int             end = 0;
+                  std::string     outstr {};
+                  unsigned char * bytes = nullptr;
+                  bytes                 = reinterpret_cast<unsigned char *>(p);
+                  i                     = static_cast<int>(-0x100) + 1;
+                  end                   = 0x100;
+                  for (; i <= end; ++i) {
+                        outstr += std::format("{:02X} ", bytes[i - 1]);
+                        if (i % 8 == 0) {
+                              log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[i - 8]), outstr);
+                              outstr.clear();
+                        }
+                  }
+                  log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
+
+                  log::log_debug("CALLER'S LOCATION: {:X}", caller.memory_address);
+                  UOnlineGameJoinGame_X * q = reinterpret_cast<UOnlineGameJoinGame_X *>(caller.memory_address);
+
+                  if (q == nullptr) {
+                        log::log_error("q WAS NULLPTR!!!!");
+                        return;
+                  }
+
+                  log::log_debug(
+                        "STARTING LOCATION (&q->JoinCountdownTime): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->JoinCountdownTime));
+                  bytes = reinterpret_cast<unsigned char *>(&q->JoinCountdownTime);
+                  i     = static_cast<int>(-0x100) + 1;
+                  end   = 0x400;
+                  for (; i <= end; ++i) {
+                        outstr += std::format("{:02X} ", bytes[i - 1]);
+                        if (i % 8 == 0) {
+                              log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[i - 8]), outstr);
+                              outstr.clear();
+                        }
+                  }
+                  log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
+
+                  /*
+                  eventually:
+                              FActiveServerData    ActiveServer
+                              FJoinMatchSettings   Settings
+                              FCustomMatchSettings CustomMatch
+                  */
+                  log::log_debug(
+                        L"{{[ JoinCountdownTime: {}, "
+                        "FailCommand: {{str: {}, len: {}}}, "
+                        "LoadingScreenCommand: {{str: {}, len: {}}}, "
+                        "WaitingForPlayersString: {{str: {}, len: {}}}, "
+                        "ReservationNotRespondingString: {{str: {}, len: {}}}, "
+                        "ReservationFullString: {{str: {}, len: {}}}, "
+                        "PartyTeamReservationFullString: {{str: {}, len: {}}}, "
+                        "NoFriendJoinPrivateMatchString: {{str: {}, len: {}}}, "
+                        "BeaconTimedOutString: {{str: {}, len: {}}}, "
+                        "NotAllPlayersJoinedString: {{str: {}, len: {}}}, "
+                        "CanceledString: {{str: {}, len: {}}}, "
+                        "SecurityKeyAcquisitionFailed: {{str: {}, len: {}}}, "
+                        "SecurityKeyVerificationFailed: {{str: {}, len: {}}}, "
+                        "SendingReservationMessage: {{str: {}, len: {}}}, "
+                        "JoiningPartyLeadersGame: {{str: {}, len: {}}}, "
+                        "InvalidPassword: {{str: {}, len: {}}}, "
+                        "WrongPlaylistString: {{str: {}, len: {}}}, "
+                        "WrongRankedMatchString: {{str: {}, len: {}}}, "
+                        "MatchEndedString: {{str: {}, len: {}}}, "
+                        "CrossplayDisabled: {{str: {}, len: {}}}, "
+                        "AnotherPlayerCanceled: {{str: {}, len: {} ]}}",
+                        q->JoinCountdownTime,
+                        q->FailCommand.ToWideString(),
+                        q->FailCommand.length(),
+                        q->LoadingScreenCommand.ToWideString(),
+                        q->LoadingScreenCommand.length(),
+                        q->WaitingForPlayersString.ToWideString(),
+                        q->WaitingForPlayersString.length(),
+                        q->ReservationNotRespondingString.ToWideString(),
+                        q->ReservationNotRespondingString.length(),
+                        q->ReservationFullString.ToWideString(),
+                        q->ReservationFullString.length(),
+                        q->PartyTeamReservationFullString.ToWideString(),
+                        q->PartyTeamReservationFullString.length(),
+                        q->NoFriendJoinPrivateMatchString.ToWideString(),
+                        q->NoFriendJoinPrivateMatchString.length(),
+                        q->BeaconTimedOutString.ToWideString(),
+                        q->BeaconTimedOutString.length(),
+                        q->NotAllPlayersJoinedString.ToWideString(),
+                        q->NotAllPlayersJoinedString.length(),
+                        q->CanceledString.ToWideString(),
+                        q->CanceledString.length(),
+                        q->SecurityKeyAcquisitionFailed.ToWideString(),
+                        q->SecurityKeyAcquisitionFailed.length(),
+                        q->SecurityKeyVerificationFailed.ToWideString(),
+                        q->SecurityKeyVerificationFailed.length(),
+                        q->SendingReservationMessage.ToWideString(),
+                        q->SendingReservationMessage.length(),
+                        q->JoiningPartyLeadersGame.ToWideString(),
+                        q->JoiningPartyLeadersGame.length(),
+                        q->InvalidPassword.ToWideString(),
+                        q->InvalidPassword.length(),
+                        q->WrongPlaylistString.ToWideString(),
+                        q->WrongPlaylistString.length(),
+                        q->WrongRankedMatchString.ToWideString(),
+                        q->WrongRankedMatchString.length(),
+                        q->MatchEndedString.ToWideString(),
+                        q->MatchEndedString.length(),
+                        q->CrossplayDisabled.ToWideString(),
+                        q->CrossplayDisabled.length(),
+                        q->AnotherPlayerCanceled.ToWideString(),
+                        q->AnotherPlayerCanceled.length());
+
+                  log::log_debug(
+                        "ActiveServer LOCATION (&q->ActiveServer): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer));
+                  log::log_debug(
+                        "ActiveServer.Reservation LOCATION (&q->ActiveServer.Reservation): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.Reservation));
+                  log::log_debug(
+                        "ActiveServer.PingURL LOCATION (&q->ActiveServer.PingURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.PingURL));
+                  log::log_debug(
+                        "ActiveServer.GameURL LOCATION (&q->ActiveServer.GameURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.GameURL));
+                  log::log_debug(
+                        "ActiveServer.JoinCredentials LOCATION (&q->ActiveServer.JoinCredentials): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.JoinCredentials));
+                  log::log_debug("Settings LOCATION (&q->Settings): {:X}", reinterpret_cast<uintptr_t>(&q->Settings));
+                  log::log_debug(
+                        "PendingFailMessage LOCATION (&q->PendingFailMessage): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->PendingFailMessage));
+                  log::log_debug(
+                        "CustomMatch LOCATION (&q->CustomMatch): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->CustomMatch));
+
+                  bool is_safe =
+                        (q->ActiveServer.JoinCredentials.length() < 512
+                         && q->ActiveServer.JoinCredentials.length() > 0);
+                  bool is_safe1 = (q->ActiveServer.PingURL.length() < 512 && q->ActiveServer.PingURL.length() > 0);
+                  bool is_safe2 = (q->ActiveServer.GameURL.length() < 512 && q->ActiveServer.GameURL.length() > 0);
+                  log::log_debug(
+                        L"{{[ PingURL: {{str: {}, len: {}}},"
+                        "GameURL: {{str: {}, len: {}}},"
+                        "JoinCredentials: {{str: {}, len: {}}} ]}}",
+                        is_safe1 ? q->ActiveServer.PingURL.ToWideString() : L"NOT SAFE!!!!",
+                        q->ActiveServer.PingURL.length(),
+                        is_safe2 ? q->ActiveServer.GameURL.ToWideString() : L"NOT SAFE!@#!@#",
+                        q->ActiveServer.GameURL.length(),
+                        is_safe ? q->ActiveServer.JoinCredentials.ToWideString() : L"NOT SAFE!!!",
+                        q->ActiveServer.JoinCredentials.length());
+
+                  is_safe  = (p->JoinCredentials.length() < 512 && p->JoinCredentials.length() > 0);
+                  is_safe1 = (p->PingURL.length() < 512 && p->PingURL.length() > 0);
+                  is_safe2 = (p->GameURL.length() < 512 && p->GameURL.length() > 0);
+
+                  log::log_debug(
+                        L"JoinCredentials: {{str:{}, len: {}}}; PingURL: {{str:{}, len:{}}}; GameURL: {{str:{}, len:{}}}",
+                        is_safe ? p->JoinCredentials.ToWideString() : L"NOT SAFE!!!",
+                        p->JoinCredentials.length(),
+                        is_safe1 ? p->PingURL.ToWideString() : L"NOT SAFE!!!!",
+                        p->PingURL.length(),
+                        is_safe2 ? p->GameURL.ToWideString() : L"NOT SAFE!@#!@#",
+                        p->GameURL.length());
+            },
+            true);
+
+      HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
+            "Function ProjectX.OnlineGameJoinGame_X.StartJoin",
+            [this](ActorWrapper caller, void * params, std::string eventName) {
+                  log::log_debug("CALLING {}...", eventName);
+
+                  using SJP = bm_helper::details::UOnlineGameJoinGame_X_execStartJoin_Params;
+
+                  SJP * p = reinterpret_cast<SJP *>(params);
 
                   log::log_debug("PARAM'S LOCATION: {:X}", reinterpret_cast<uintptr_t>(params));
                   if (p == nullptr) {
@@ -538,17 +686,194 @@ void ServerPreferrer::init_hooked_events() {
                         return;
                   }
 
-                  /*
-                   * THIS IS LIKE, MY BEST BET AT A DAMN THING!!! ARGH!!!!!
-                   *
-                   * HAVE TO CHECK ALL OF THE ADDRESS SPACE!!!!
-                   *
-                   *
-                   *
-                   *
-                   *
-                   *
-                   */
+                  int             i   = 0;
+                  int             end = 0;
+                  std::string     outstr {};
+                  unsigned char * bytes = nullptr;
+                  /* FUCK IT!!!!!!!!! */
+                  struct test {
+                        uint32_t ldword;
+                        uint32_t rdword;
+                  };
+                  bytes = reinterpret_cast<unsigned char *>(caller.memory_address);
+                  i     = -0x600;
+                  end   = 0x600;
+                  for (; i <= end; i += 8) {
+                        test * t = reinterpret_cast<test *>(&bytes[i]);
+                        log::log_debug(
+                              "CHECKING {} AND {} AT {:X}",
+                              t->ldword,
+                              t->rdword,
+                              reinterpret_cast<uintptr_t>(&bytes[i - 8]));
+                        if (t->ldword > 0 && t->ldword < 512 && t->ldword == t->rdword) {
+                              using bm_helper::details::FString;
+                              FString * fs = reinterpret_cast<FString *>(&bytes[i - 8]);
+                              log::log_debug(
+                                    "FOUND FSTRING AT {:X}: {}",
+                                    reinterpret_cast<uintptr_t>(&bytes[i - 8]),
+                                    *fs);
+                        }
+                  }
+
+                  /* FUCK IT!!!!!!!!!! */
+
+                  bytes = reinterpret_cast<unsigned char *>(p);
+
+                  i   = static_cast<int>(-0x100) + 1;
+                  end = 0x100;
+                  for (; i <= end; ++i) {
+                        outstr += std::format("{:02X} ", bytes[i - 1]);
+                        if (i % 8 == 0) {
+                              log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[i - 8]), outstr);
+                              outstr.clear();
+                        }
+                  }
+                  log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
+
+                  using bm_helper::details::UOnlineGameJoinGame_X;
+                  log::log_debug("CALLER'S LOCATION: {:X}", caller.memory_address);
+                  UOnlineGameJoinGame_X * q = reinterpret_cast<UOnlineGameJoinGame_X *>(caller.memory_address);
+
+                  if (q == nullptr) {
+                        log::log_error("q WAS NULLPTR!!!!");
+                        return;
+                  }
+
+                  log::log_debug(
+                        "STARTING LOCATION (&q->JoinCountdownTime): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->JoinCountdownTime));
+                  bytes = reinterpret_cast<unsigned char *>(&q->JoinCountdownTime);
+                  i     = static_cast<int>(-0x100) + 1;
+                  end   = 0x400;
+                  for (; i <= end; ++i) {
+                        outstr += std::format("{:02X} ", bytes[i - 1]);
+                        if (i % 8 == 0) {
+                              log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[i - 8]), outstr);
+                              outstr.clear();
+                        }
+                  }
+                  log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
+
+                  log::log_debug(
+                        L"{{[ JoinCountdownTime: {}, "
+                        "FailCommand: {{str: {}, len: {}}}, "
+                        "LoadingScreenCommand: {{str: {}, len: {}}}, "
+                        "WaitingForPlayersString: {{str: {}, len: {}}}, "
+                        "ReservationNotRespondingString: {{str: {}, len: {}}}, "
+                        "ReservationFullString: {{str: {}, len: {}}}, "
+                        "PartyTeamReservationFullString: {{str: {}, len: {}}}, "
+                        "NoFriendJoinPrivateMatchString: {{str: {}, len: {}}}, "
+                        "BeaconTimedOutString: {{str: {}, len: {}}}, "
+                        "NotAllPlayersJoinedString: {{str: {}, len: {}}}, "
+                        "CanceledString: {{str: {}, len: {}}}, "
+                        "SecurityKeyAcquisitionFailed: {{str: {}, len: {}}}, "
+                        "SecurityKeyVerificationFailed: {{str: {}, len: {}}}, "
+                        "SendingReservationMessage: {{str: {}, len: {}}}, "
+                        "JoiningPartyLeadersGame: {{str: {}, len: {}}}, "
+                        "InvalidPassword: {{str: {}, len: {}}}, "
+                        "WrongPlaylistString: {{str: {}, len: {}}}, "
+                        "WrongRankedMatchString: {{str: {}, len: {}}}, "
+                        "MatchEndedString: {{str: {}, len: {}}}, "
+                        "CrossplayDisabled: {{str: {}, len: {}}}, "
+                        "AnotherPlayerCanceled: {{str: {}, len: {} ]}}",
+                        q->JoinCountdownTime,
+                        q->FailCommand.ToWideString(),
+                        q->FailCommand.length(),
+                        q->LoadingScreenCommand.ToWideString(),
+                        q->LoadingScreenCommand.length(),
+                        q->WaitingForPlayersString.ToWideString(),
+                        q->WaitingForPlayersString.length(),
+                        q->ReservationNotRespondingString.ToWideString(),
+                        q->ReservationNotRespondingString.length(),
+                        q->ReservationFullString.ToWideString(),
+                        q->ReservationFullString.length(),
+                        q->PartyTeamReservationFullString.ToWideString(),
+                        q->PartyTeamReservationFullString.length(),
+                        q->NoFriendJoinPrivateMatchString.ToWideString(),
+                        q->NoFriendJoinPrivateMatchString.length(),
+                        q->BeaconTimedOutString.ToWideString(),
+                        q->BeaconTimedOutString.length(),
+                        q->NotAllPlayersJoinedString.ToWideString(),
+                        q->NotAllPlayersJoinedString.length(),
+                        q->CanceledString.ToWideString(),
+                        q->CanceledString.length(),
+                        q->SecurityKeyAcquisitionFailed.ToWideString(),
+                        q->SecurityKeyAcquisitionFailed.length(),
+                        q->SecurityKeyVerificationFailed.ToWideString(),
+                        q->SecurityKeyVerificationFailed.length(),
+                        q->SendingReservationMessage.ToWideString(),
+                        q->SendingReservationMessage.length(),
+                        q->JoiningPartyLeadersGame.ToWideString(),
+                        q->JoiningPartyLeadersGame.length(),
+                        q->InvalidPassword.ToWideString(),
+                        q->InvalidPassword.length(),
+                        q->WrongPlaylistString.ToWideString(),
+                        q->WrongPlaylistString.length(),
+                        q->WrongRankedMatchString.ToWideString(),
+                        q->WrongRankedMatchString.length(),
+                        q->MatchEndedString.ToWideString(),
+                        q->MatchEndedString.length(),
+                        q->CrossplayDisabled.ToWideString(),
+                        q->CrossplayDisabled.length(),
+                        q->AnotherPlayerCanceled.ToWideString(),
+                        q->AnotherPlayerCanceled.length());
+
+                  log::log_debug(
+                        "ActiveServer LOCATION (&q->ActiveServer): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer));
+                  log::log_debug(
+                        "ActiveServer.Reservation LOCATION (&q->ActiveServer.Reservation): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.Reservation));
+                  log::log_debug(
+                        "ActiveServer.PingURL LOCATION (&q->ActiveServer.PingURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.PingURL));
+                  log::log_debug(
+                        "ActiveServer.GameURL LOCATION (&q->ActiveServer.GameURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.GameURL));
+                  log::log_debug(
+                        "ActiveServer.JoinCredentials LOCATION (&q->ActiveServer.JoinCredentials): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.JoinCredentials));
+                  log::log_debug("Settings LOCATION (&q->Settings): {:X}", reinterpret_cast<uintptr_t>(&q->Settings));
+                  log::log_debug(
+                        "PendingFailMessage LOCATION (&q->PendingFailMessage): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->PendingFailMessage));
+                  log::log_debug(
+                        "CustomMatch LOCATION (&q->CustomMatch): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->CustomMatch));
+
+                  bool is_safe =
+                        (q->ActiveServer.JoinCredentials.length() < 512
+                         && q->ActiveServer.JoinCredentials.length() > 0);
+                  bool is_safe1 = (q->ActiveServer.PingURL.length() < 512 && q->ActiveServer.PingURL.length() > 0);
+                  bool is_safe2 = (q->ActiveServer.GameURL.length() < 512 && q->ActiveServer.GameURL.length() > 0);
+                  log::log_debug(
+                        L"{{[ PingURL: {{str: {}, len: {}}},"
+                        "GameURL: {{str: {}, len: {}}},"
+                        "JoinCredentials: {{str: {}, len: {}}} ]}}",
+                        is_safe1 ? q->ActiveServer.PingURL.ToWideString() : L"NOT SAFE!!!!",
+                        q->ActiveServer.PingURL.length(),
+                        is_safe2 ? q->ActiveServer.GameURL.ToWideString() : L"NOT SAFE!@#!@#",
+                        q->ActiveServer.GameURL.length(),
+                        is_safe ? q->ActiveServer.JoinCredentials.ToWideString() : L"NOT SAFE!!!",
+                        q->ActiveServer.JoinCredentials.length());
+
+                  log::log_debug("{}", *p);
+            });
+
+      HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
+            "Function ProjectX.OnlineGameJoinGame_X.StartJoin",
+            [this](ActorWrapper caller, void * params, std::string eventName) {
+                  log::log_debug("CALLING {}...POST", eventName);
+
+                  using SJP = bm_helper::details::UOnlineGameJoinGame_X_execStartJoin_Params;
+
+                  SJP * p = reinterpret_cast<SJP *>(params);
+
+                  log::log_debug("PARAM'S LOCATION: {:X}", reinterpret_cast<uintptr_t>(params));
+                  if (p == nullptr) {
+                        log::log_error("p WAS NULLPTR!!!!");
+                        return;
+                  }
 
                   unsigned char * bytes = reinterpret_cast<unsigned char *>(p);
 
@@ -564,73 +889,157 @@ void ServerPreferrer::init_hooked_events() {
                   }
                   log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
 
+                  using bm_helper::details::UOnlineGameJoinGame_X;
+                  log::log_debug("CALLER'S LOCATION: {:X}", caller.memory_address);
+                  UOnlineGameJoinGame_X * q = reinterpret_cast<UOnlineGameJoinGame_X *>(caller.memory_address);
+
+                  if (q == nullptr) {
+                        log::log_error("q WAS NULLPTR!!!!");
+                        return;
+                  }
+
                   log::log_debug(
-                        L"a {{str: {}, len: {}}} | b {{str: {}, len: {}}} | c {{str: {}, len: {}}} | d {{str: {}, len: {}}}",
-                        p->a.ToWideString(),
-                        p->a.length(),
-                        p->b.ToWideString(),
-                        p->b.length(),
-                        p->c.ToWideString(),
-                        p->c.length(),
-                        p->d.ToWideString(),
-                        p->d.length());
+                        "STARTING LOCATION (&q->JoinCountdownTime): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->JoinCountdownTime));
+                  bytes = reinterpret_cast<unsigned char *>(&q->JoinCountdownTime);
+                  i     = static_cast<int>(-0x100) + 1;
+                  end   = 0x400;
+                  for (; i <= end; ++i) {
+                        outstr += std::format("{:02X} ", bytes[i - 1]);
+                        if (i % 8 == 0) {
+                              log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[i - 8]), outstr);
+                              outstr.clear();
+                        }
+                  }
+                  log::log_debug("{:X} {}", reinterpret_cast<uintptr_t>(&bytes[end - 8]), outstr);
 
-                  // log::log_debug(
-                  //       "NEW ACTIVE SERVER'S LOCATION: {:X}",
-                  //       reinterpret_cast<uintptr_t>(&p->NEWACTIVESERVER));
+                  /*
+                  eventually:
+                              FActiveServerData    ActiveServer
+                              FJoinMatchSettings   Settings
+                              FCustomMatchSettings CustomMatch
+                  */
+                  log::log_debug(
+                        L"{{[ JoinCountdownTime: {}, "
+                        "FailCommand: {{str: {}, len: {}}}, "
+                        "LoadingScreenCommand: {{str: {}, len: {}}}, "
+                        "WaitingForPlayersString: {{str: {}, len: {}}}, "
+                        "ReservationNotRespondingString: {{str: {}, len: {}}}, "
+                        "ReservationFullString: {{str: {}, len: {}}}, "
+                        "PartyTeamReservationFullString: {{str: {}, len: {}}}, "
+                        "NoFriendJoinPrivateMatchString: {{str: {}, len: {}}}, "
+                        "BeaconTimedOutString: {{str: {}, len: {}}}, "
+                        "NotAllPlayersJoinedString: {{str: {}, len: {}}}, "
+                        "CanceledString: {{str: {}, len: {}}}, "
+                        "SecurityKeyAcquisitionFailed: {{str: {}, len: {}}}, "
+                        "SecurityKeyVerificationFailed: {{str: {}, len: {}}}, "
+                        "SendingReservationMessage: {{str: {}, len: {}}}, "
+                        "JoiningPartyLeadersGame: {{str: {}, len: {}}}, "
+                        "InvalidPassword: {{str: {}, len: {}}}, "
+                        "WrongPlaylistString: {{str: {}, len: {}}}, "
+                        "WrongRankedMatchString: {{str: {}, len: {}}}, "
+                        "MatchEndedString: {{str: {}, len: {}}}, "
+                        "CrossplayDisabled: {{str: {}, len: {}}}, "
+                        "AnotherPlayerCanceled: {{str: {}, len: {} ]}}",
+                        q->JoinCountdownTime,
+                        q->FailCommand.ToWideString(),
+                        q->FailCommand.length(),
+                        q->LoadingScreenCommand.ToWideString(),
+                        q->LoadingScreenCommand.length(),
+                        q->WaitingForPlayersString.ToWideString(),
+                        q->WaitingForPlayersString.length(),
+                        q->ReservationNotRespondingString.ToWideString(),
+                        q->ReservationNotRespondingString.length(),
+                        q->ReservationFullString.ToWideString(),
+                        q->ReservationFullString.length(),
+                        q->PartyTeamReservationFullString.ToWideString(),
+                        q->PartyTeamReservationFullString.length(),
+                        q->NoFriendJoinPrivateMatchString.ToWideString(),
+                        q->NoFriendJoinPrivateMatchString.length(),
+                        q->BeaconTimedOutString.ToWideString(),
+                        q->BeaconTimedOutString.length(),
+                        q->NotAllPlayersJoinedString.ToWideString(),
+                        q->NotAllPlayersJoinedString.length(),
+                        q->CanceledString.ToWideString(),
+                        q->CanceledString.length(),
+                        q->SecurityKeyAcquisitionFailed.ToWideString(),
+                        q->SecurityKeyAcquisitionFailed.length(),
+                        q->SecurityKeyVerificationFailed.ToWideString(),
+                        q->SecurityKeyVerificationFailed.length(),
+                        q->SendingReservationMessage.ToWideString(),
+                        q->SendingReservationMessage.length(),
+                        q->JoiningPartyLeadersGame.ToWideString(),
+                        q->JoiningPartyLeadersGame.length(),
+                        q->InvalidPassword.ToWideString(),
+                        q->InvalidPassword.length(),
+                        q->WrongPlaylistString.ToWideString(),
+                        q->WrongPlaylistString.length(),
+                        q->WrongRankedMatchString.ToWideString(),
+                        q->WrongRankedMatchString.length(),
+                        q->MatchEndedString.ToWideString(),
+                        q->MatchEndedString.length(),
+                        q->CrossplayDisabled.ToWideString(),
+                        q->CrossplayDisabled.length(),
+                        q->AnotherPlayerCanceled.ToWideString(),
+                        q->AnotherPlayerCanceled.length());
 
-                  // bool is_safe =
-                  //       (p->NEWACTIVESERVER.JoinCredentials.length() < 512
-                  //        && p->NEWACTIVESERVER.JoinCredentials.length() > 0);
-                  // bool is_safe1 =
-                  //       (p->NEWACTIVESERVER.PingURL.length() < 512 &&
-                  //       p->NEWACTIVESERVER.PingURL.length() > 0);
-                  // bool is_safe2 =
-                  //       (p->NEWACTIVESERVER.GameURL.length() < 512 &&
-                  //       p->NEWACTIVESERVER.GameURL.length() > 0);
+                  log::log_debug(
+                        "ActiveServer LOCATION (&q->ActiveServer): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer));
+                  log::log_debug(
+                        "ActiveServer.Reservation LOCATION (&q->ActiveServer.Reservation): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.Reservation));
+                  log::log_debug(
+                        "ActiveServer.PingURL LOCATION (&q->ActiveServer.PingURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.PingURL));
+                  log::log_debug(
+                        "ActiveServer.GameURL LOCATION (&q->ActiveServer.GameURL): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.GameURL));
+                  log::log_debug(
+                        "ActiveServer.JoinCredentials LOCATION (&q->ActiveServer.JoinCredentials): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->ActiveServer.JoinCredentials));
+                  log::log_debug("Settings LOCATION (&q->Settings): {:X}", reinterpret_cast<uintptr_t>(&q->Settings));
+                  log::log_debug(
+                        "PendingFailMessage LOCATION (&q->PendingFailMessage): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->PendingFailMessage));
+                  log::log_debug(
+                        "CustomMatch LOCATION (&q->CustomMatch): {:X}",
+                        reinterpret_cast<uintptr_t>(&q->CustomMatch));
 
-                  // log::log_debug(
-                  //       L"JoinCredentials: {{str:{}, len: {}}}; PingURL: {{str:{},
-                  //       len:{}}}; GameURL: {{str:{}, len:{}}}", is_safe ?
-                  //       p->NEWACTIVESERVER.JoinCredentials.ToWideString() : L"NOT
-                  //       SAFE!!!", p->NEWACTIVESERVER.JoinCredentials.length(), is_safe1
-                  //       ? p->NEWACTIVESERVER.PingURL.ToWideString() : L"NOT SAFE!!!!",
-                  //       p->NEWACTIVESERVER.PingURL.length(),
-                  //       is_safe2 ? p->NEWACTIVESERVER.GameURL.ToWideString() : L"NOT
-                  //       SAFE!@#!@#", p->NEWACTIVESERVER.GameURL.length());
-
-                  // ARGH::FServerReservationData ugh      =
-                  // p->NEWACTIVESERVER.Reservation; bool                         is_safe3
-                  // = ugh.ServerName.length() > 0 && ugh.ServerName.length() < 512;
-
-                  // log::log_debug(
-                  //       L"RESERVATION SERVERNAME: {{str: {}, len: {}}} | ",
-                  //       is_safe3 ? ugh.ServerName.ToWideString() : L"NO SAEFO",
-                  //       ugh.ServerName.length());
-
-                  // ARGH::FJoinMatchSettings cmon = p->JOINSETTINGS;
-                  // log::log_debug("JOINSETTINGS'S LOCATION: {:X}",
-                  // reinterpret_cast<uintptr_t>(&p->JOINSETTINGS)); bool is_safe4 =
-                  // cmon.one.length() > 0 && cmon.one.length() < 512; bool is_safe5 =
-                  // cmon.two.length() > 0 && cmon.two.length() < 512; bool is_safe6 =
-                  // cmon.three.length() > 0 && cmon.three.length() < 512;
-
-                  // log::log_debug(
-                  //       L"ONEOHCMON: {{str: {}, len: {}}} | "
-                  //       L"TWOOHCMON: {{str: {}, len: {}}} | "
-                  //       L"THREEEOHCMON: {{str: {}, len: {}}} | ",
-                  //       is_safe4 ? cmon.one.ToWideString() : L"NO SAEFO",
-                  //       cmon.one.length(),
-                  //       is_safe5 ? cmon.two.ToWideString() : L"NO SAEFO",
-                  //       cmon.two.length(),
-                  //       is_safe6 ? cmon.three.ToWideString() : L"NO SAEFO",
-                  //       cmon.three.length());
-            });
+                  bool is_safe =
+                        (q->ActiveServer.JoinCredentials.length() < 512
+                         && q->ActiveServer.JoinCredentials.length() > 0);
+                  bool is_safe1 = (q->ActiveServer.PingURL.length() < 512 && q->ActiveServer.PingURL.length() > 0);
+                  bool is_safe2 = (q->ActiveServer.GameURL.length() < 512 && q->ActiveServer.GameURL.length() > 0);
+                  log::log_debug(
+                        L"{{[ PingURL: {{str: {}, len: {}}},"
+                        "GameURL: {{str: {}, len: {}}},"
+                        "JoinCredentials: {{str: {}, len: {}}} ]}}",
+                        is_safe1 ? q->ActiveServer.PingURL.ToWideString() : L"NOT SAFE!!!!",
+                        q->ActiveServer.PingURL.length(),
+                        is_safe2 ? q->ActiveServer.GameURL.ToWideString() : L"NOT SAFE!@#!@#",
+                        q->ActiveServer.GameURL.length(),
+                        is_safe ? q->ActiveServer.JoinCredentials.ToWideString() : L"NOT SAFE!!!",
+                        q->ActiveServer.JoinCredentials.length());
+                  log::log_debug("{}", *p);
+            },
+            true);
 
       HookedEvents::AddHookedEvent("Function Engine.GameInfo.PreExit", [this](std::string eventName) {
             // ASSURED CLEANUP
             onUnload();
       });
+
+      HookedEvents::AddHookedEventWithCaller<ActorWrapper>(
+            "Function ProjectX.OnlineGameJoinGame_X.SendPing",
+            [this](ActorWrapper caller, void * params, std::string eventName) {
+                  log::log_debug("CALLING {}...POST", eventName);
+
+                  using OGJG = bm_helper::details::UOnlineGameJoinGame_X;
+                  OGJG * p   = reinterpret_cast<OGJG *>(caller.memory_address);
+
+                  log::log_debug("{}", *p);
+            });
 
       log::log_debug("hooked");
 }

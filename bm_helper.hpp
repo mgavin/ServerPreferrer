@@ -1,9 +1,16 @@
 #ifndef __BM_HELPER_HPP__
 #define __BM_HELPER_HPP__
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include <format>
 #include <map>
 #include <string>
 #include <vector>
+
+#include "Windows.h"
 
 #include "bakkesmod/utilities/loadoututilities.h"
 #include "bakkesmod/wrappers/arraywrapper.h"
@@ -391,6 +398,12 @@ const std::map<OnlinePlatform, std::string> onlineplatform_ids_str = {
 };
 
 namespace details {
+      // PACK THESE STRUCTS INTO ALIGNMENTS OF 4 BYTES
+      // I DONT KNOW WHY
+      // A GAME THING I GUESS
+      // #ifdef _MSC_VER
+      // #pragma pack(push, 0x4)
+      // #endif
       struct FSceNpOnlineId {
             unsigned char data[0x10];
             unsigned char term;
@@ -439,11 +452,12 @@ namespace details {
       // (0x0000 - 0x0010)
       class FString {
       public:
-#ifdef _UNICODE
-            using ElementType = const wchar_t;
-#else
 #ifdef _MBCS
             using ElementType = const char;
+#else
+#ifdef _UNICODE
+            using ElementType = const wchar_t;
+
 #endif
 #endif
 
@@ -462,6 +476,22 @@ namespace details {
             ~FString() {}
 
       public:
+#ifdef _MBCS
+            FString & assign(ElementPointer other) {
+                  ArrayCount = (other ? (strlen(other) + 1) : 0);
+                  ArrayMax   = ArrayCount;
+                  ArrayData  = (ArrayCount > 0 ? other : nullptr);
+                  return *this;
+            }
+
+            std::string ToString() const {
+                  if (!empty()) {
+                        return std::string(ArrayData);
+                  }
+
+                  return "";
+            }
+#else
 #ifdef _UNICODE
             FString & assign(ElementPointer other) {
                   ArrayCount = (other ? (wcslen(other) + 1) : 0);
@@ -500,22 +530,7 @@ namespace details {
 
                   return "";
             }
-#else
-#ifdef _MBCS
-            FString & assign(ElementPointer other) {
-                  ArrayCount = (other ? (strlen(other) + 1) : 0);
-                  ArrayMax   = ArrayCount;
-                  ArrayData  = (ArrayCount > 0 ? other : nullptr);
-                  return *this;
-            }
 
-            std::string ToString() const {
-                  if (!empty()) {
-                        return std::string(ArrayData);
-                  }
-
-                  return "";
-            }
 #endif
 #endif
 
@@ -539,21 +554,22 @@ namespace details {
             FString & operator=(const FString & other) { return assign(other.c_str()); }
 
             bool operator==(const FString & other) {
-#ifdef _UNICODE
-                  return (wcscmp(ArrayData, other.ArrayData) == 0);
-#else
 #ifdef _MCBS
                   return (strcmp(ArrayData, other.ArrayData) == 0);
+#else
+#ifdef _UNICODE
+                  return (wcscmp(ArrayData, other.ArrayData) == 0);
 #endif
 #endif
             }
 
             bool operator!=(const FString & other) {
-#ifdef _UNICODE
-                  return (wcscmp(ArrayData, other.ArrayData) != 0);
-#else
 #ifdef _MCBS
                   return (strcmp(ArrayData, other.ArrayData) != 0);
+#else
+#ifdef _UNICODE
+                  return (wcscmp(ArrayData, other.ArrayData) != 0);
+
 #endif
 #endif
             }
@@ -561,8 +577,8 @@ namespace details {
 
       struct FName {
             // "An index and a number into a hardcoded table of strings"... or whatever
-            int index;
-            int number;
+            uint32_t index;
+            uint32_t number;
       };
 
       template <typename TArray> class TIterator {
@@ -742,6 +758,12 @@ namespace details {
             UObject * ObjectArchetype;
       };
 
+      struct FScriptDelegate {
+            UObject * Object;        // 0x0000 (0x04)
+            FName     FunctionName;  // 0x0004 (0x08)
+            uint8_t   unknown[0x8];  // the sdk was complaining about the size, saying there was something missing here
+      };
+
       // Class Core.Field
       // 0x0008 (0x0034 - 0x003C)
       class UField : public UObject {
@@ -754,11 +776,13 @@ namespace details {
       // 0x00C8
       class UStruct : public UField {
       public:
-            uint8_t  UnknownData00[0x10];  // ? hmm
+            uint8_t  UnknownData01[0x10];
+            UField * SuperField;
             UField * Children;
             uint32_t PropertySize;
+            uint8_t  UnknownData02[0x1C];
             int32_t  MinAlignment;
-            uint8_t  UnknownData01[0x98];
+            uint8_t  UnknownData03[0x7C];
       };
 
       // Class Core.State
@@ -788,26 +812,26 @@ namespace details {
       // ScriptStruct ProjectX._Types_X.JoinMatchSettings
       // 0x0020
       struct FJoinMatchSettings {
-            uint8_t       MatchType;             // 0x0000 (0x0001) [0x0000000000000000]
-            int32_t       PlaylistId;            // 0x0004 (0x0004) [0x0000000000000000]
-            uint32_t      bFriendJoin      : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000001]
-            uint32_t      bMigration       : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000002]
-            uint32_t      bRankedReconnect : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000004]
-            class FString Password;              // 0x0010 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            uint8_t  MatchType;             // 0x0000 (0x0001) [0x0000000000000000]
+            int32_t  PlaylistId;            // 0x0004 (0x0004) [0x0000000000000000]
+            uint32_t bFriendJoin      : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000001]
+            uint32_t bMigration       : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000002]
+            uint32_t bRankedReconnect : 1;  // 0x0008 (0x0004) [0x0000000000000000] [0x00000004]
+            FString  Password;              // 0x0010 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
       };
 
       // ScriptStruct ProjectX._Types_X.ServerReservationData
       // 0x0070
       struct FServerReservationData {
-            FString ServerName;     // 0x0000 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-            int32_t Playlist;       // 0x0010 (0x0004) [0x0000000000000000]
-            FString Region;         // 0x0018 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-            FString ReservationID;  // 0x0028 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-            FString DSRToken;       // 0x0038 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-            // UNetworkEncryptionKey * Keys;           // 0x0048 (0x0008) [0x0000000000000000]
-            uint8_t padding[0xC0];
-            FString JoinName;      // 0x0050 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
-            FString JoinPassword;  // 0x0060 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString   ServerName;          // 0x0000 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            int32_t   Playlist;            // 0x0010 (0x0004) [0x0000000000000000]
+            uint8_t   UnknownData00[0x4];  // 0x0014 (0x0004) MISSED OFFSET
+            FString   Region;              // 0x0018 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString   ReservationID;       // 0x0028 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString   DSRToken;            // 0x0038 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            uintptr_t Keys_ptr;            // 0x0048 (0x0008) [0x0000000000000000]
+            FString   JoinName;            // 0x0050 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
+            FString   JoinPassword;        // 0x0060 (0x0010) [0x0000000000400000] (CPF_NeedCtorLink)
       };
 
       // ScriptStruct ProjectX._Types_X.ActiveServerData
@@ -850,15 +874,15 @@ namespace details {
             uint32_t                 bClubServer : 1;  // 0x0088 (0x0004) [0x0001000000000000] [0x00000001]
       };
 
+      // Function ProjectX.OnlineGameJoinGame_X.StartJoin
+      // [0x00824002]
       struct UOnlineGameJoinGame_X_execStartJoin_Params {
-            struct FServerReservationData
-                  Reservation;  // 0x0000 (0x0070) [0x0000000000400080] (CPF_Parm | CPF_NeedCtorLink)
-            struct FJoinMatchSettings JoinSettings;  // 0x0070 (0x0020) [0x0000000000400090] (CPF_OptionalParm |
-                                                     // CPF_Parm | CPF_NeedCtorLink)
-            bool ReturnValue;  // 0x0090 (0x0004) [0x0000000000000580] [0x00000001] (CPF_Parm | CPF_OutParm |
-                               // CPF_ReturnParm)
-            // uint8_t padding[0xF];
-            struct FActiveServerData NewActiveServer;  //
+            FServerReservationData Reservation;   // 0x0000 (0x0070) [0x0000000000400080] (CPF_Parm | CPF_NeedCtorLink)
+            FJoinMatchSettings     JoinSettings;  // 0x0070 (0x0020) [0x0000000000400090] (CPF_OptionalParm |
+                                                  // CPF_Parm | CPF_NeedCtorLink)
+            bool ReturnValue : 1;  // 0x0090 (0x0004) [0x0000000000000580] [0x00000001] (CPF_Parm | CPF_OutParm |
+                                   // CPF_ReturnParm)
+            // FActiveServerData                        NewActiveServer;                                  //
             // 0x0098 (0x00A0) [0x0000000000400000] (CPF_NeedCtorLink)
       };
 
@@ -873,109 +897,59 @@ namespace details {
       // 0x004C (0x0064 - 0x00B0)
       class UOnline_X : public UStateObject_X {
       public:
-            // class UOnlineSubsystem *
-            //                   OnlineSub;   // 0x0068 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
-            // class UPsyNet_X * PsyNet;      // 0x0070 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
-            // class UOnlineSubsystem * EOS;  // 0x0078 (0x0008) [0x0000008000002000] (CPF_Transient |
-            // CPF_ProtectedWrite) struct FScriptDelegate
-            //         __EventEOSInitialized__Delegate;  // 0x0080 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
-            // uint8_t __EventEOSInitialized__Delegate_UnknownData00[0x8];  // 0x0088 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // struct FScriptDelegate
-            //         __EventEosInitTimeout__Delegate;  // 0x0098 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
-            // uint8_t __EventEosInitTimeout__Delegate_UnknownData01[0x8];  // 0x00A0 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            uint8_t padding[0x28];
+            uintptr_t       OnlineSub;  // 0x0068 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
+            uintptr_t       PsyNet;     // 0x0070 (0x0008) [0x0000004000002000] (CPF_Transient | CPF_PrivateWrite)
+            uintptr_t       EOS;        // 0x0078 (0x0008) [0x0000008000002000] (CPF_Transient | CPF_ProtectedWrite)
+            FScriptDelegate __EventEOSInitialized__Delegate;  // 0x0080 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate __EventEosInitTimeout__Delegate;  // 0x0098 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
       };
 
       // Class ProjectX.OnlineGameJoinGame_X
       // 0x03A0 (0x00B0 - 0x0450)
       class UOnlineGameJoinGame_X : public UOnline_X {
       public:
-            uint8_t pad[0x20];             // no idea.
-            int32_t JoinCountdownTime;     // 0x00B0 (0x0004) (CPF_Edit)
-            FString FailCommand;           // 0x00B8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
-            FString LoadingScreenCommand;  // 0x00C8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
-            // UShakeComponent_X *
-            //        JoinGameShake;  // 0x00D8 (0x0008) (CPF_Edit | CPF_ExportObject | CPF_Component | CPF_EditInline)
-            uint8_t pad1[0x8];  // covers the above's pointer
-            // UReservationBeacon_X *
-            //        ReservationBeacon;        // 0x00E0 (0x0008) (CPF_ExportObject | CPF_Component | CPF_EditInline)
-            uint8_t pad2[0x8];                       // covers the above's pointer
-            FString WaitingForPlayersString;         // 0x00E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString ReservationNotRespondingString;  // 0x00F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString ReservationFullString;           // 0x0108 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString PartyTeamReservationFullString;  // 0x0118 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString NoFriendJoinPrivateMatchString;  // 0x0128 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString BeaconTimedOutString;            // 0x0138 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString NotAllPlayersJoinedString;       // 0x0148 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString CanceledString;                  // 0x0158 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString SecurityKeyAcquisitionFailed;    // 0x0168 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString SecurityKeyVerificationFailed;   // 0x0178 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString SendingReservationMessage;       // 0x0188 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString JoiningPartyLeadersGame;         // 0x0198 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString InvalidPassword;                 // 0x01A8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString WrongPlaylistString;             // 0x01B8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString WrongRankedMatchString;          // 0x01C8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString MatchEndedString;                // 0x01D8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString CrossplayDisabled;               // 0x01E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FString AnotherPlayerCanceled;           // 0x01F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
-            FActiveServerData    ActiveServer;  // 0x0208 (0x00A0) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
-            FJoinMatchSettings   Settings;      // 0x02A8 (0x0020) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
-            FString              PendingFailMessage;  // 0x02C8 (0x0010) (CPF_Transient | CPF_NeedCtorLink)
-            // TArray<UPlayer *>  JoinedPlayers;  // 0x02D8 (0x0010) (CPF_Transient | CPF_NeedCtorLink |
-            // CPF_PrivateWrite)
-            uint8_t              pad3[0x10];   // covers the above's TArray
+            int32_t   JoinCountdownTime;     // 0x00B0 (0x0004) (CPF_Edit)
+            FString   FailCommand;           // 0x00B8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
+            FString   LoadingScreenCommand;  // 0x00C8 (0x0010) (CPF_Edit | CPF_NeedCtorLink)
+            uintptr_t JoinGameShake;  // 0x00D8 (0x0008) (CPF_Edit | CPF_ExportObject | CPF_Component | CPF_EditInline)
+            uintptr_t ReservationBeacon;        // 0x00E0 (0x0008) (CPF_ExportObject | CPF_Component | CPF_EditInline)
+            FString   WaitingForPlayersString;  // 0x00E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   ReservationNotRespondingString;  // 0x00F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   ReservationFullString;           // 0x0108 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   PartyTeamReservationFullString;  // 0x0118 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   NoFriendJoinPrivateMatchString;  // 0x0128 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   BeaconTimedOutString;            // 0x0138 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   NotAllPlayersJoinedString;       // 0x0148 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   CanceledString;                  // 0x0158 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   SecurityKeyAcquisitionFailed;    // 0x0168 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   SecurityKeyVerificationFailed;   // 0x0178 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   SendingReservationMessage;       // 0x0188 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   JoiningPartyLeadersGame;         // 0x0198 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   InvalidPassword;                 // 0x01A8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   WrongPlaylistString;             // 0x01B8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   WrongRankedMatchString;          // 0x01C8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   MatchEndedString;                // 0x01D8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   CrossplayDisabled;               // 0x01E8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FString   AnotherPlayerCanceled;           // 0x01F8 (0x0010) (CPF_Const | CPF_Localized | CPF_NeedCtorLink)
+            FActiveServerData  ActiveServer;  // 0x0208 (0x00A0) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
+            FJoinMatchSettings Settings;      // 0x02A8 (0x0020) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
+            FString            PendingFailMessage;  // 0x02C8 (0x0010) (CPF_Transient | CPF_NeedCtorLink)
+            TArray<uintptr_t>  JoinedPlayers;  // 0x02D8 (0x0010) (CPF_Transient | CPF_NeedCtorLink | CPF_PrivateWrite)
             FCustomMatchSettings CustomMatch;  // 0x02E8 (0x0090) (CPF_NeedCtorLink | CPF_PrivateWrite)
-            // FScriptDelegate      __EventJoinGameComplete__Delegate;  // 0x0378 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t
-            //       __EventJoinGameComplete__Delegate_UnknownData00[0x8];  // 0x0380 (0x0008) FIX WRONG SIZE OF
-            //       PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventStatusUpdate__Delegate;               // 0x0390 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t __EventStatusUpdate__Delegate_UnknownData01[0x8];    // 0x0398 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventCountdownStarted__Delegate;           // 0x03A8 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t
-            //       __EventCountdownStarted__Delegate_UnknownData02[0x8];  // 0x03B0 (0x0008) FIX WRONG SIZE OF
-            //       PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventCountdownEnded__Delegate;             // 0x03C0 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t __EventCountdownEnded__Delegate_UnknownData03[0x8];  // 0x03C8 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventActiveServerChanged__Delegate;        // 0x03D8 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t         __EventActiveServerChanged__Delegate_UnknownData04
-            //       [0x8];  // 0x03E0 (0x0008) FIX WRONG SIZE OF PREVIOUS PROPERTY  [Original:0x0018, Missing: 0x0008]
-            // FScriptDelegate __EventServerReserved__Delegate;             // 0x03F0 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t __EventServerReserved__Delegate_UnknownData05[0x8];  // 0x03F8 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventPasswordRequired__Delegate;           // 0x0408 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t
-            //       __EventPasswordRequired__Delegate_UnknownData06[0x8];  // 0x0410 (0x0008) FIX WRONG SIZE OF
-            //       PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventJoiningGame__Delegate;                // 0x0420 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t __EventJoiningGame__Delegate_UnknownData07[0x8];     // 0x0428 (0x0008) FIX WRONG SIZE OF
-            // PREVIOUS
-            //                                                              // PROPERTY  [Original:0x0018, Missing:
-            //                                                              0x0008]
-            // FScriptDelegate __EventMaxPlayersChanged__Delegate;          // 0x0438 (0x0018) (CPF_NeedCtorLink)
-            // uint8_t         __EventMaxPlayersChanged__Delegate_UnknownData08
-            //       [0x8];  // 0x0440 (0x0008) FIX WRONG SIZE OF PREVIOUS PROPERTY  [Original:0x0018, Missing: 0x0008]
-            // uint8_t pad4[0xD8];  // covers the above FScriptDelegate(s)s and their missing unknown data
+            FScriptDelegate
+                  __EventJoinGameComplete__Delegate;        // 0x0378 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate __EventStatusUpdate__Delegate;  // 0x0390 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate
+                  __EventCountdownStarted__Delegate;          // 0x03A8 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate __EventCountdownEnded__Delegate;  // 0x03C0 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate
+                  __EventActiveServerChanged__Delegate;       // 0x03D8 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate __EventServerReserved__Delegate;  // 0x03F0 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate
+                  __EventPasswordRequired__Delegate;       // 0x0408 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate __EventJoiningGame__Delegate;  // 0x0420 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
+            FScriptDelegate
+                  __EventMaxPlayersChanged__Delegate;  // 0x0438 (0x0018) [0x0000000000400000] (CPF_NeedCtorLink)
       };
 
       template <> class ArrayWrapper<details::FVoter> {};
@@ -1050,7 +1024,244 @@ namespace details {
             unsigned int  local_players;
             unsigned int  remote_players;
       };
+
+      // #ifdef _MSC_VER
+      // #pragma pack(pop)
+      // #endif
 }  // namespace details
 }  // namespace bm_helper
+
+template <> struct std::formatter<bm_helper::details::FString> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FString & obj, std::format_context & ctx) const {
+#ifdef _MCBS
+            return std::format_to(ctx.out(), "{{str: {}, len: {}}}", obj.ToString(), obj.length())
+#else
+#ifdef _UNICODE
+            return std::format_to(ctx.out(), L"{{str: {}, len: {}}}", obj.ToWideString(), obj.length());
+#endif
+#endif
+      }
+};
+
+#define PARENS       ()
+#define EXPAND(...)  EXPAND3(EXPAND3(EXPAND3(EXPAND3(__VA_ARGS__))))
+#define EXPAND3(...) EXPAND2(EXPAND2(EXPAND2(EXPAND2(__VA_ARGS__))))
+#define EXPAND2(...) EXPAND1(EXPAND1(EXPAND1(EXPAND1(__VA_ARGS__))))
+#define EXPAND1(...) __VA_ARGS__
+
+#define FOR_EACH(macro, ...)            __VA_OPT__(EXPAND(FOR_EACH_HELPER(macro, __VA_ARGS__)))
+#define FOR_EACH_HELPER(macro, a1, ...) macro(a1) __VA_OPT__(, ) __VA_OPT__(FOR_EACH_AGAIN PARENS(macro, __VA_ARGS__))
+#define FOR_EACH_AGAIN()                FOR_EACH_HELPER
+
+#define PRINT_STRUCTURE(name) std::format("{}: {}", #name, name)
+
+template <> struct std::formatter<bm_helper::details::FJoinMatchSettings> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FJoinMatchSettings & obj, std::format_context & ctx) const {
+            bool     bFriendJoin     = obj.bFriendJoin;
+            bool     bMigration      = obj.bMigration;
+            bool     RankedReconnect = obj.bRankedReconnect;
+            uint8_t  MatchType       = obj.MatchType;
+            uint32_t PlaylistId      = obj.PlaylistId;
+            auto     Password        = obj.Password;
+
+            return std::format_to(
+                  ctx.out(),
+                  "FJoinMatchSettings{{{}, {}, {}, {}, {}, {}}}",
+                  FOR_EACH(PRINT_STRUCTURE, bFriendJoin, bMigration, RankedReconnect, MatchType, PlaylistId, Password));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::FServerReservationData> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FServerReservationData & obj, std::format_context & ctx) const {
+            int32_t Playlist      = obj.Playlist;
+            auto    DSRToken      = obj.DSRToken;
+            auto    JoinName      = obj.JoinName;
+            auto    JoinPassword  = obj.JoinPassword;
+            auto    Region        = obj.Region;
+            auto    ReservationID = obj.ReservationID;
+            auto    ServerName    = obj.ServerName;
+
+            return std::format_to(
+                  ctx.out(),
+                  "FServerReservationData{{{}, {}, {}, {}, {}, {}, {}}}",
+                  FOR_EACH(
+                        PRINT_STRUCTURE,
+                        Playlist,
+                        DSRToken,
+                        JoinName,
+                        JoinPassword,
+                        Region,
+                        ReservationID,
+                        ServerName));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::FActiveServerData> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FActiveServerData & obj, std::format_context & ctx) const {
+            auto Reservation     = obj.Reservation;
+            auto GameURL         = obj.GameURL;
+            auto PingURL         = obj.PingURL;
+            auto JoinCredentials = obj.JoinCredentials;
+
+            return std::format_to(
+                  ctx.out(),
+                  "{{{}, {}, {}, {}}}",
+                  FOR_EACH(PRINT_STRUCTURE, Reservation, GameURL, PingURL, JoinCredentials));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::UOnlineGameJoinGame_X_execStartJoin_Params> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::UOnlineGameJoinGame_X_execStartJoin_Params & obj, std::format_context & ctx)
+            const {
+            auto JoinSettings = obj.JoinSettings;
+            auto Reservation  = obj.Reservation;
+            bool ReturnValue  = obj.ReturnValue;
+
+            return std::format_to(
+                  ctx.out(),
+                  "{{{}, {}, {}}}",
+                  FOR_EACH(PRINT_STRUCTURE, JoinSettings, Reservation, ReturnValue));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::FClubColorSet> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FClubColorSet & obj, std::format_context & ctx) const {
+            auto TeamColorID     = obj.TeamColorID;
+            auto CustomColorID   = obj.CustomColorID;
+            auto bTeamColorSet   = obj.bTeamColorSet;
+            auto bCustomColorSet = obj.bCustomColorSet;
+
+            return std::format_to(
+                  ctx.out(),
+                  "{{{}, {}, {}, {}}}",
+                  FOR_EACH(PRINT_STRUCTURE, TeamColorID, CustomColorID, bTeamColorSet, bCustomColorSet));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::FCustomMatchTeamSettings> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FCustomMatchTeamSettings & obj, std::format_context & ctx) const {
+            auto Name      = obj.Name;
+            auto Colors    = obj.Colors;
+            auto GameScore = obj.GameScore;
+
+            return std::format_to(ctx.out(), "{{{}, {}, {}}}", FOR_EACH(PRINT_STRUCTURE, Name, Colors, GameScore));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::FCustomMatchSettings> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::FCustomMatchSettings & obj, std::format_context & ctx) const {
+            auto GameTags       = obj.GameTags;           // FString
+            auto MapName        = "<check source code>";  // obj.MapName;          // FName
+            auto GameMode       = obj.GameMode;           // uint8_t
+            auto MaxPlayerCount = obj.MaxPlayerCount;     // int32_t
+            auto ServerName     = obj.ServerName;         // FString
+            auto Password       = obj.Password;           // FString
+            auto bPublic        = obj.bPublic;            // uint32_t
+            auto TeamSettings0  = obj.TeamSettings[0];    // FCustomMatchTeamSettings
+            auto TeamSettings1  = obj.TeamSettings[1];    // FCustomMatchTeamSettings
+            auto bClubServer    = obj.bClubServer;        // uint32_t
+
+            return std::format_to(
+                  ctx.out(),
+                  "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
+                  FOR_EACH(
+                        PRINT_STRUCTURE,
+                        GameTags,
+                        MapName,
+                        GameMode,
+                        MaxPlayerCount,
+                        ServerName,
+                        Password,
+                        bPublic,
+                        TeamSettings0,
+                        TeamSettings1,
+                        bClubServer));
+      }
+};
+
+template <> struct std::formatter<bm_helper::details::UOnlineGameJoinGame_X> {
+      constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+      auto format(const bm_helper::details::UOnlineGameJoinGame_X & obj, std::format_context & ctx) const {
+            auto JoinCountdownTime              = obj.JoinCountdownTime;               // int32_t
+            auto FailCommand                    = obj.FailCommand;                     // FString
+            auto LoadingScreenCommand           = obj.LoadingScreenCommand;            // FString
+            auto JoinGameShake                  = obj.JoinGameShake;                   // uintptr_t
+            auto ReservationBeacon              = obj.ReservationBeacon;               // uintptr_t
+            auto WaitingForPlayersString        = obj.WaitingForPlayersString;         // FString
+            auto ReservationNotRespondingString = obj.ReservationNotRespondingString;  // FString
+            auto ReservationFullString          = obj.ReservationFullString;           // FString
+            auto PartyTeamReservationFullString = obj.PartyTeamReservationFullString;  // FString
+            auto NoFriendJoinPrivateMatchString = obj.NoFriendJoinPrivateMatchString;  // FString
+            auto BeaconTimedOutString           = obj.BeaconTimedOutString;            // FString
+            auto NotAllPlayersJoinedString      = obj.NotAllPlayersJoinedString;       // FString
+            auto CanceledString                 = obj.CanceledString;                  // FString
+            auto SecurityKeyAcquisitionFailed   = obj.SecurityKeyAcquisitionFailed;    // FString
+            auto SecurityKeyVerificationFailed  = obj.SecurityKeyVerificationFailed;   // FString
+            auto SendingReservationMessage      = obj.SendingReservationMessage;       // FString
+            auto JoiningPartyLeadersGame        = obj.JoiningPartyLeadersGame;         // FString
+            auto InvalidPassword                = obj.InvalidPassword;                 // FString
+            auto WrongPlaylistString            = obj.WrongPlaylistString;             // FString
+            auto WrongRankedMatchString         = obj.WrongRankedMatchString;          // FString
+            auto MatchEndedString               = obj.MatchEndedString;                // FString
+            auto CrossplayDisabled              = obj.CrossplayDisabled;               // FString
+            auto AnotherPlayerCanceled          = obj.AnotherPlayerCanceled;           // FString
+            auto ActiveServer                   = obj.ActiveServer;                    // FActiveServerData
+            auto Settings                       = obj.Settings;                        // FJoinMatchSettings
+            auto PendingFailMessage             = obj.PendingFailMessage;              // FString
+            auto JoinedPlayers                  = "<check source code>";  // obj.JoinedPlayers; // TArray<uintptr_t>
+            auto CustomMatch                    = obj.CustomMatch;        // FCustomMatchSettings
+
+            return std::format_to(
+                  ctx.out(),
+                  "{{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
+                  FOR_EACH(
+                        PRINT_STRUCTURE,
+                        JoinCountdownTime,
+                        FailCommand,
+                        LoadingScreenCommand,
+                        JoinGameShake,
+                        ReservationBeacon,
+                        WaitingForPlayersString,
+                        ReservationNotRespondingString,
+                        ReservationFullString,
+                        PartyTeamReservationFullString,
+                        NoFriendJoinPrivateMatchString,
+                        BeaconTimedOutString,
+                        NotAllPlayersJoinedString,
+                        CanceledString,
+                        SecurityKeyAcquisitionFailed,
+                        SecurityKeyVerificationFailed,
+                        SendingReservationMessage,
+                        JoiningPartyLeadersGame,
+                        InvalidPassword,
+                        WrongPlaylistString,
+                        WrongRankedMatchString,
+                        MatchEndedString,
+                        CrossplayDisabled,
+                        AnotherPlayerCanceled,
+                        ActiveServer,
+                        Settings,
+                        PendingFailMessage,
+                        JoinedPlayers,
+                        CustomMatch));
+      }
+};
 
 #endif
