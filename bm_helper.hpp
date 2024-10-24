@@ -602,7 +602,7 @@ namespace details {
 #else
 #ifdef _UNICODE
             FString & assign(ElementPointer other) {
-                  ArrayCount = (other ? (wcslen(other) + 1) : 0);
+                  ArrayCount = static_cast<int32_t>(other ? (wcslen(other) + 1) : 0);
                   ArrayMax   = ArrayCount;
                   ArrayData  = (ArrayCount > 0 ? other : nullptr);
                   return *this;
@@ -626,7 +626,7 @@ namespace details {
                               CP_UTF8,
                               WC_NO_BEST_FIT_CHARS,
                               wstr.c_str(),
-                              wstr.length(),
+                              static_cast<int>(wstr.length()),
                               str,
                               1024,
                               " ",

@@ -49,6 +49,8 @@ public:
 
       friend bool operator==(const ConnectionState & lhs, const CONNECTION_STATUS & rhs) { return lhs.status == rhs; }
 };
+
+enum class CHECKS { PING, PLAYLIST };
 }  // namespace
 
 constexpr auto plugin_version =
@@ -111,6 +113,8 @@ private:
 
       std::unique_ptr<PersistentManagedCVarStorage> cvar_storage;
 
+      // test status
+      using test_t = std::expected<bool, CONNECTION_STATUS>;
       // server data
       struct server_info {
             // join* entries  are unnecessary for my purposes
@@ -121,8 +125,8 @@ private:
             std::string                ping_url;
             std::string                game_url;
       };
-      std::deque<server_info>                                         server_entries;
-      std::vector<std::future<std::expected<int, CONNECTION_STATUS>>> checks;
+      std::deque<server_info>               server_entries;
+      std::map<CHECKS, std::future<test_t>> checks;
 
       // ping data
       int ping_threshold = 0;
@@ -135,11 +139,6 @@ private:
       bool should_focus_on_success     = true;
       bool check_server_ping           = false;
 
-      struct base_param_type {
-            bm_helper::details::FString command;
-            bool                        write_to_log : 1;
-      };
-
       // initialization related functions
       void init_cvars();
       void init_hooked_events();
@@ -150,10 +149,10 @@ private:
       void enable_plugin();
       void disable_plugin();
 
-      void check_server_connection(server_info server);
+      void   check_server_connection(server_info server);
+      test_t time_icmp_ping(std::string pingaddr, int times, int ping_threshold);
 
       // tests
-      using test_t = std::expected<int, CONNECTION_STATUS>;
       test_t is_valid_game_mode(PlaylistId playid);
       test_t is_good_ping_icmp(std::string pingaddr, int times);
 

@@ -89,6 +89,7 @@
       <UseStandardPreprocessor>true</UseStandardPreprocessor>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <SupportJustMyCode>true</SupportJustMyCode>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>NotSet</SubSystem>

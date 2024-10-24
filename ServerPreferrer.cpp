@@ -16,11 +16,10 @@
 #include "ServerPreferrer.hpp"
 
 #include <chrono>
+#include <expected>
 #include <future>
-#include <optional>
 #include <regex>
 #include <thread>
-#include <variant>
 
 // clang-format off
 #ifndef WIN32_LEAN_AND_MEAN
@@ -46,6 +45,7 @@
 #include "CVarManager.hpp"
 #include "HookedEvents.hpp"
 #include "imgui_helper.hpp"
+#include "imgui_sugar/imgui_sugar.hpp"
 #include "Logger.hpp"
 #include "PersistentManagedCVarStorage.hpp"
 
@@ -150,6 +150,10 @@ void ServerPreferrer::init_hooked_events() {
                               log::log_debug("{}", *p);
 
                               if (p->ActiveServer.PingURL.length() != 0) {  // WE HAVE THE INFORMATION!
+                                    // stop getting more server information
+                                    HookedEvents::RemoveHook(
+                                          "Function ProjectX.OnlineGameJoinGame_X.EventActiveServerChanged");
+
                                     // check it
                                     using namespace std::chrono;
                                     server_info info {
@@ -329,7 +333,7 @@ ServerPreferrer::test_t ServerPreferrer::is_valid_game_mode(PlaylistId playid) {
       return true;
 }
 
-static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr, int times) {
+ServerPreferrer::test_t ServerPreferrer::time_icmp_ping(std::string pingaddr, int times, int ping_threshold) {
       log::log_debug("TESTING THAT PING!!!!");
       // https://learn.microsoft.com/en-us/windows/win32/api/icmpapi/nf-icmpapi-icmpsendecho#examples
       HANDLE        hIcmpFile;
@@ -374,7 +378,16 @@ static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr
       free(ReplyBuffer);
 
       log::log_debug("DONE TESTING THAT PING!!!!");
-      return (avg / i);
+      int  avg_ping = avg / i;
+      auto str      = std::format(
+            "AVERAGE PING {1:c} THRESHOLD, {0} {1:c} {2}",
+            avg_ping,
+            (avg_ping > ping_threshold ? '>' : (avg_ping < ping_threshold ? '<' : '=')),
+            ping_threshold);
+      log::log_debug(str);
+      gameWrapper->LogToChatbox(str, "SP");
+
+      return (avg_ping <= ping_threshold);
 }
 
 /**
@@ -382,22 +395,21 @@ static std::expected<int, CONNECTION_STATUS> time_icmp_ping(std::string pingaddr
  * @param server
  */
 void ServerPreferrer::check_server_connection(server_info server) {
-      // remove all previous checks
+      // remove all previous checks, if any exist
       checks.clear();
 
       // throw a thread outside of the game's thread so it doesn't lag the game.
       std::string pingaddr = server.ping_url;
       pingaddr             = pingaddr.substr(0, pingaddr.find(":"));
 
-      /*
-       * NEED TO THINK ABOUT THIS SECTION LATER UGGHHHHHHHHHHH
-       */
-
       if (check_server_ping) {
-            checks.emplace_back(std::async(std::launch::async, time_icmp_ping, pingaddr, 5));
+            checks.emplace(
+                  CHECKS::PING,
+                  std::async(std::launch::async, &ServerPreferrer::time_icmp_ping, this, pingaddr, 5, ping_threshold));
       }
 
-      // checks.emplace_back(std::async(
+      // this doesn't need to happen here
+      // checks.emplace(CHECKS::PLAYLIST, std::async(
       //       std::launch::async,
       //       &ServerPreferrer::is_valid_game_mode,
       //       this,
@@ -407,51 +419,42 @@ void ServerPreferrer::check_server_connection(server_info server) {
       log::log_debug("IN CHECK_SERVER_CONNECTION; {}", PRINT_NAMEANDVAR(checks.size()));
       HookedEvents::AddHookedEvent("Function ProjectX.GFxEngine_X.Tick", [this](...) {
             log::log_debug("IN TICK; {}", PRINT_NAMEANDVAR(checks.size()));
-            for (auto check = checks.begin(); auto & elem : checks) {
+            for (auto & elem : checks) {
                   using namespace std::chrono_literals;
-                  std::future_status fs = elem.wait_for(0s);
-                  if (fs == std::future_status::ready) {
-                        // HANDLE IT
-                        checks.clear();
-                        break;
+                  std::future_status fs = elem.second.wait_for(0s);
+                  if (fs != std::future_status::ready) {
+                        // WAIT UNTIL ALL CHECKS ARE READY
+                        return;
                   }
             }
 
-            int ping = checks[0].get().value_or(0);  // .get() MAKES TASK INVALID
+            test_t ping_check = checks[CHECKS::PING].get().or_else(  // .get() MAKES TASK INVALID
+                  [this](const CONNECTION_STATUS & e) {
+                        std::string report = "ERROR WHILE RUNNING PING TEST: {}";
+                        std::string errorstr;
+                        switch (e) {
+                              case CONNECTION_STATUS::INET_PTON_FAILURE:
+                                    errorstr = "INET_PTON FAILURE";
+                                    break;
+                              case CONNECTION_STATUS::IcmpCreateFile_INVALID_HANDLE_VALUE_FAILURE:
+                                    errorstr = "IcmpCreateFile INVALID_HANDLE_VALUE FAILURE";
+                                    break;
+                              case CONNECTION_STATUS::NO_MEMORY_REPLY_BUFFER:
+                                    errorstr = "UNABLE TO CREATE MEMORY FOR REPLY BUFFER";
+                                    break;
+                              case CONNECTION_STATUS::ICMP_PING_CALL_FAILURE:
+                                    errorstr = "ICMP PING CALL FAILURE";
+                                    break;
+                              default:
+                                    errorstr = "UNKNOWN";
+                        }
+                        log::log_error(report, errorstr);
+                        return test_t {false};
+                  });
 
-            log::log_debug(
-                  "HAVE VALUE YET?: {}, THRESHOLD WTF?: {}, WHERERE MY VARIABLES?: {}",
-                  ping,
-                  ping_threshold,
-                  should_requeue_after_cancel);
+            bool success = ping_check.value();
 
-            // report
-            if (ping < 0) {
-                  // an error occurred
-                  log::log_error(
-                        "ERROR WHILE RUNNING PING TEST: {}",
-                        ping == -1   ? "INET_PTON FAILURE"
-                        : ping == -2 ? "IcmpCreateFile INVALID_HANDLE_VALUE FAILURE"
-                        : ping == -3 ? " UNABLE TO CREATE MEMORY FOR REPLY BUFFER"
-                        : ping == -4 ? " ICMP PING CALL FAILURE "
-                                     : "UNKNOWN");
-            } else {
-                  // success?
-                  auto str = std::format(
-                        "AVERAGE PING {0:c} THRESHOLD, {1} "
-                        "{0:c} {2}",
-                        ping > ping_threshold   ? '>'
-                        : ping < ping_threshold ? '<'
-                                                : '=',
-                        ping,
-                        ping_threshold);
-
-                  log::log_error(str);
-                  gameWrapper->LogToChatbox(str, "SP");
-            }
-
-            // finally, if an error occurred or ping above the threshold
-            if (ping < 0 || ping > ping_threshold) {
+            if (!success) {
                   // TURN OFF THE GAME'S FLASHING TASKBAR ICON!
                   // because the player didn't join a game, so don't flash the taskbar
                   // like they did
@@ -468,17 +471,19 @@ void ServerPreferrer::check_server_connection(server_info server) {
                   if (should_requeue_after_cancel) {
                         gameWrapper->Execute([this](GameWrapper * gw) { cvarManager->executeCommand("queue"); });
                   }
+            } else {
+                  if (should_focus_on_success) {
+                        // idk if I need to check for states to determine what nCmdShow should be...
+                        // if (IsIconic(rl_hwnd)) {
+                        //      // means the rocket league window is minimized
+                        //      ShowWindowAsync(rl_hwnd, SW_RESTORE);
+                        //}
+                        ShowWindowAsync(rl_hwnd, SW_RESTORE);
+                  }
             }
 
-            if (should_focus_on_success) {
-                  // idk if I need to check for states to determine what nCmdShow should be...
-                  // if (IsIconic(rl_hwnd)) {
-                  //      // means the rocket league window is minimized
-                  //      ShowWindowAsync(rl_hwnd, SW_RESTORE);
-                  //}
-                  ShowWindowAsync(rl_hwnd, SW_RESTORE);
-            }
             HookedEvents::RemoveHook("Function ProjectX.GFxEngine_X.Tick");
+            checks.clear();
       });
       /*** end check for ping ***/
       // write_out_server_attempt();
@@ -593,34 +598,62 @@ void ServerPreferrer::RenderSettings() {
             CVarManager::instance().get_cvar_enabled().setValue(plugin_enabled);
       }
 
+      ImGui::NewLine();
+
       ImGuiTabBarFlags tbf = ImGuiTabBarFlags_NoCloseWithMiddleMouseButton;
-      if (ImGui::BeginTabBar("##tabbar", tbf)) {
-            if (ImGui::BeginTabItem("Options", 0, ImGuiTabItemFlags_NoCloseButton | ImGuiTabItemFlags_SetSelected)) {
+      with_TabBar("##tabbar", tbf) {
+            with_TabItem("Options", 0, ImGuiTabItemFlags_NoCloseButton | ImGuiTabItemFlags_SetSelected) {
                   ImGui::TextUnformatted("I'm in a tab!");
-                  int threshold = CVarManager::instance().get_cvar_server_ping_threshold().getIntValue();
-                  if (ImGui::SliderInt("Maximum allowed ping to server.", &threshold, 0, 400)) {
-                        threshold = std::clamp(threshold, 0, 400);
-                        CVarManager::instance().get_cvar_server_ping_threshold().setValue(threshold);
+                  static bool check_ping = true;
+                  check_ping             = CVarManager::instance().get_cvar_check_server_ping().getBoolValue();
+                  maybe_Disabled(check_ping) {
+                        static int threshold = 0;
+                        threshold            = CVarManager::instance().get_cvar_server_ping_threshold().getIntValue();
+                        if (ImGui::SliderInt("Maximum allowed ping to server.", &threshold, 0, 400)) {
+                              threshold = std::clamp(threshold, 0, 400);
+                              CVarManager::instance().get_cvar_server_ping_threshold().setValue(threshold);
+                        }
                   }
 
-                  bool check_ping = CVarManager::instance().get_cvar_check_server_ping().getBoolValue();
                   if (ImGui::Checkbox("Check the server ping before connecting?", &check_ping)) {
                         CVarManager::instance().get_cvar_check_server_ping().setValue(check_ping);
                   }
 
-                  bool should_requeue =
-                        CVarManager::instance().get_cvar_should_requeue_after_ping_test().getBoolValue();
+                  static bool should_requeue = false;
+                  should_requeue = CVarManager::instance().get_cvar_should_requeue_after_ping_test().getBoolValue();
                   if (ImGui::Checkbox("Should requeue automatically after failing ping test?", &should_requeue)) {
                         CVarManager::instance().get_cvar_should_requeue_after_ping_test().setValue(should_requeue);
                   }
 
-                  bool should_focus = CVarManager::instance().get_cvar_should_focus_on_success().getBoolValue();
+                  static bool should_focus = true;
+                  should_focus             = CVarManager::instance().get_cvar_should_focus_on_success().getBoolValue();
                   if (ImGui::Checkbox("Should focus Rocket League on success?", &should_focus)) {
-                        CVarManager::instance().get_cvar_should_focus_on_success().setValue(should_requeue);
+                        CVarManager::instance().get_cvar_should_focus_on_success().setValue(should_focus);
                   }
-                  ImGui::EndTabItem();
             }
-            ImGui::EndTabBar();
+
+            with_TabItem("Servers", 0, ImGuiTabItemFlags_NoCloseButton) {
+                  // list servers
+
+                  // two veritcal columns
+
+                  // left side => recent
+                  // right side => unwanted
+
+                  // done by name
+
+                  // options:
+                  // Save last # of servers: [X]
+                  // ...
+                  // then write to csv file, lol
+                  // Column1    | Column2
+                  // ServerName | Date Added
+                  // asdasd-123 | <date>
+                  // ServerPreferrer_UnwantedServers.csv
+                  // ServerPreferrer_History.csv
+                  // Column1
+                  // ServerName
+            }
       }
 }
 
